@@ -9,13 +9,17 @@
     "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
+    "noEmit": true,
     "baseUrl": "..",
     "typeRoots": [
       "../backend/node_modules/@types",
       "../node_modules/@types"
-    ]
+    ],
+    "paths": {
+      "../backend/dist/*": ["./types.d.ts"]
+    }
   },
-  "include": ["index.ts"],
+  "include": ["index.ts", "types.d.ts"],
   "exclude": ["node_modules", "dist", "../backend/node_modules", "../frontend/node_modules"]
 }
 
