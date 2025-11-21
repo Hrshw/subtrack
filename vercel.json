@@ -16,7 +16,7 @@
   ],
   "functions": {
     "api/index.ts": {
-      "runtime": "@vercel/node",
+      "runtime": "@vercel/node@3.0.7",
       "includeFiles": "backend/dist/**"
     }
   }
