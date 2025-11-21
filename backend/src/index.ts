@@ -12,7 +12,7 @@ import notificationRoutes from './routes/notificationRoutes';
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
 
-// CORS Configuration
+// CORS Configuration - Simplified and more permissive
 const envOrigins = [
     process.env.CLIENT_URL,
     process.env.CLIENT_URLS,
@@ -28,33 +28,36 @@ const allowedOrigins = [
     'http://localhost:3000',
 ];
 
-// CORS middleware with explicit configuration
+// CORS middleware - Allow all Vercel domains and configured origins
 const corsOptions = {
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
         // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
+        if (!origin) {
+            return callback(null, true);
+        }
 
         const normalizedOrigin = origin.replace(/\/$/, '');
 
-        // Allow all Vercel domains (*.vercel.app)
+        // Allow ALL Vercel domains (*.vercel.app) - this covers all preview and production deployments
         if (normalizedOrigin.match(/^https:\/\/.*\.vercel\.app$/)) {
-            console.log(`CORS: Allowing Vercel origin: ${normalizedOrigin}`);
+            console.log(`✅ CORS: Allowing Vercel origin: ${normalizedOrigin}`);
             return callback(null, true);
         }
 
         // Allow exact matches from environment variables
         if (allowedOrigins.includes(normalizedOrigin)) {
-            console.log(`CORS: Allowing configured origin: ${normalizedOrigin}`);
+            console.log(`✅ CORS: Allowing configured origin: ${normalizedOrigin}`);
             return callback(null, true);
         }
 
         // Allow in development mode
         if (process.env.NODE_ENV === 'development') {
-            console.log(`CORS: Allowing origin in development: ${normalizedOrigin}`);
+            console.log(`✅ CORS: Allowing origin in development: ${normalizedOrigin}`);
             return callback(null, true);
         }
 
-        console.warn(`CORS blocked origin: ${normalizedOrigin}. Allowed origins:`, allowedOrigins);
+        console.warn(`❌ CORS blocked origin: ${normalizedOrigin}`);
+        console.warn(`Allowed origins:`, allowedOrigins);
         callback(new Error(`Not allowed by CORS: ${normalizedOrigin}`));
     },
     credentials: true,
@@ -68,7 +71,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Explicitly override Railway proxy CORS headers
+// Explicitly set CORS headers to override any proxy headers (Railway, etc.)
 app.use((req, res, next) => {
     const origin = req.headers.origin;
 

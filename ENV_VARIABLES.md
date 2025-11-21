@@ -17,8 +17,10 @@
 | `NODE_ENV` | Environment mode | `production` |
 | `MONGO_URI` | MongoDB connection string | `mongodb+srv://...` |
 | `CLERK_SECRET_KEY` | Clerk secret key (starts with `sk_`) | `sk_live_...` |
-| `CLIENT_URL` | Primary frontend URL for CORS | `https://subtrack.vercel.app` |
+| `CLIENT_URL` | Primary frontend URL for CORS (optional - all *.vercel.app are auto-allowed) | `https://subtrack.vercel.app` |
 | `CLIENT_URLS` | (Optional) Comma-separated extra origins (preview URLs) | `https://preview-1.vercel.app,https://preview-2.vercel.app` |
+
+**Note**: The backend automatically allows ALL `*.vercel.app` domains, so you don't need to set `CLIENT_URL` unless you have a custom domain.
 | `ENCRYPTION_KEY` | 32+ character encryption key | Generate random string |
 | `GEMINI_API_KEY` | Google Gemini API key | `AIza...` |
 | `STRIPE_SECRET_KEY` | Stripe secret key (starts with `sk_`) | `sk_live_...` |

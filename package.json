@@ -10,9 +10,6 @@
     "build:all": "npm run build:backend && npm run build:frontend",
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm run dev"
-  },
-  "engines": {
-    "node": "22.x"
   }
 }
 
