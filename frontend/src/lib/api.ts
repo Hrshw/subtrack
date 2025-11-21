@@ -1,13 +1,20 @@
 /**
  * Get the API base URL
- * Uses VITE_API_URL if set, otherwise falls back to relative URLs
+ * In production on Vercel, uses relative URLs (/api) for zero CORS
+ * In development or if VITE_API_URL is set, uses that URL
  */
 export const getApiUrl = (): string => {
-    // If VITE_API_URL is set, use it (for both dev and production)
+    // In production on Vercel, use relative URLs (same domain = zero CORS)
+    if (import.meta.env.PROD && !import.meta.env.VITE_API_URL) {
+        return '/api';
+    }
+    
+    // If VITE_API_URL is explicitly set, use it (for custom backends)
     if (import.meta.env.VITE_API_URL) {
         return import.meta.env.VITE_API_URL.replace(/\/$/, '');
     }
-    // Fallback to relative URLs (for Vercel rewrites)
-    return '/api';
+    
+    // Development fallback
+    return import.meta.env.DEV ? 'http://localhost:5000/api' : '/api';
 };
 

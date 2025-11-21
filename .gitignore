@@ -48,6 +48,13 @@ Thumbs.db
 *.tsbuildinfo
 *.log
 
+# Frontend build artifacts
+frontend/dist/
+frontend/.vite/
+
+# Backend build artifacts
+backend/dist/
+
 # Railway
 .railway/
 
