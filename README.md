@@ -119,9 +119,14 @@ Stop wasting ₹20,000–₹80,000/month on unused dev tools.
 
 1. **Clone & Install**
 ```bash
-cd SaaSSaver
-cd backend && npm install
-cd ../frontend && npm install
+git clone https://github.com/yourusername/subtrack.git
+cd subtrack
+
+# Install backend dependencies
+cd backend && npm install && cd ..
+
+# Install frontend dependencies
+cd frontend && npm install && cd ..
 ```
 
 2. **Environment Setup**
