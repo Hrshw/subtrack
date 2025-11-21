@@ -335,7 +335,6 @@ Special shoutouts:
 - **Clerk** for amazing auth
 - **Stripe** for easy payments
 - **shadcn** for beautiful components
-- **Vercel** for hosting (coming soon)
 - **Arc Browser** for design inspiration
 - **Linear** for UX inspiration
 
@@ -343,18 +342,11 @@ Special shoutouts:
 
 ## 🚀 Deploy
 
-### Vercel (Frontend)
-```bash
-cd frontend
-vercel --prod
-```
+Deploy the frontend and backend to your preferred hosting platform. Make sure to:
 
-### Railway/Render (Backend)
-```bash
-cd backend
-# Set environment variables in dashboard
-# Deploy via GitHub integration
-```
+1. Set all required environment variables (see `ENV_VARIABLES.md`)
+2. Configure CORS settings in the backend to allow your frontend domain
+3. Set `VITE_API_URL` in the frontend to point to your backend URL
 
 ---
 

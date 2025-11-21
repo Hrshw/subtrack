@@ -12,11 +12,10 @@ import notificationRoutes from './routes/notificationRoutes';
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
 
-// CORS Configuration - Simplified and more permissive
+// CORS Configuration
 const envOrigins = [
     process.env.CLIENT_URL,
     process.env.CLIENT_URLS,
-    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
 ];
 
 const allowedOrigins = [
@@ -28,36 +27,27 @@ const allowedOrigins = [
     'http://localhost:3000',
 ];
 
-// CORS middleware - Allow all Vercel domains and configured origins
+// CORS middleware with explicit configuration
 const corsOptions = {
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
         // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) {
-            return callback(null, true);
-        }
+        if (!origin) return callback(null, true);
 
         const normalizedOrigin = origin.replace(/\/$/, '');
 
-        // Allow ALL Vercel domains (*.vercel.app) - this covers all preview and production deployments
-        if (normalizedOrigin.match(/^https:\/\/.*\.vercel\.app$/)) {
-            console.log(`✅ CORS: Allowing Vercel origin: ${normalizedOrigin}`);
-            return callback(null, true);
-        }
-
         // Allow exact matches from environment variables
         if (allowedOrigins.includes(normalizedOrigin)) {
-            console.log(`✅ CORS: Allowing configured origin: ${normalizedOrigin}`);
+            console.log(`CORS: Allowing configured origin: ${normalizedOrigin}`);
             return callback(null, true);
         }
 
         // Allow in development mode
         if (process.env.NODE_ENV === 'development') {
-            console.log(`✅ CORS: Allowing origin in development: ${normalizedOrigin}`);
+            console.log(`CORS: Allowing origin in development: ${normalizedOrigin}`);
             return callback(null, true);
         }
 
-        console.warn(`❌ CORS blocked origin: ${normalizedOrigin}`);
-        console.warn(`Allowed origins:`, allowedOrigins);
+        console.warn(`CORS blocked origin: ${normalizedOrigin}. Allowed origins:`, allowedOrigins);
         callback(new Error(`Not allowed by CORS: ${normalizedOrigin}`));
     },
     credentials: true,
@@ -71,17 +61,16 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Explicitly set CORS headers to override any proxy headers (Railway, etc.)
+// Explicit CORS headers middleware
 app.use((req, res, next) => {
     const origin = req.headers.origin;
 
     if (origin) {
         const normalizedOrigin = origin.replace(/\/$/, '');
-        const isVercelDomain = normalizedOrigin.match(/^https:\/\/.*\.vercel\.app$/);
-        const isAllowed = allowedOrigins.includes(normalizedOrigin) || isVercelDomain;
+        const isAllowed = allowedOrigins.includes(normalizedOrigin);
 
         if (isAllowed || process.env.NODE_ENV === 'development') {
-            // Explicitly set headers to override Railway proxy headers
+            // Explicitly set CORS headers
             res.setHeader('Access-Control-Allow-Origin', normalizedOrigin);
             res.setHeader('Access-Control-Allow-Credentials', 'true');
             res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
@@ -134,7 +123,6 @@ app.get('/cors-debug', (req, res) => {
         allowedOrigins: allowedOrigins,
         clientUrl: process.env.CLIENT_URL,
         clientUrls: process.env.CLIENT_URLS,
-        isVercelDomain: req.headers.origin?.match(/^https:\/\/.*\.vercel\.app$/) ? true : false,
         nodeEnv: process.env.NODE_ENV
     });
 });
