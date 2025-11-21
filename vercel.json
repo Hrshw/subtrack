@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "buildCommand": "cd backend && npm install && npm run build && cd ../frontend && npm install && npm run build",
+  "buildCommand": "cd backend && npm install && npm run build && cd ../frontend && npm install --legacy-peer-deps && npm run build",
   "outputDirectory": "frontend/dist",
-  "installCommand": "cd backend && npm install && cd ../frontend && npm install",
+  "installCommand": "cd backend && npm install && cd ../frontend && npm install --legacy-peer-deps",
   "framework": null,
   "rewrites": [
     {
