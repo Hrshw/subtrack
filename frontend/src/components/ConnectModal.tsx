@@ -6,6 +6,7 @@ import { Label } from './ui/label';
 import { getApiUrl } from '../lib/api';
 import axios from 'axios';
 import { useAuth } from '@clerk/clerk-react';
+import { AlertCircle, CheckCircle2, ExternalLink, Key } from 'lucide-react';
 
 interface ConnectModalProps {
     isOpen: boolean;
@@ -17,178 +18,180 @@ interface ConnectModalProps {
 const ConnectModal: React.FC<ConnectModalProps> = ({ isOpen, onClose, provider, onConnected }) => {
     const [token, setToken] = useState('');
     const [loading, setLoading] = useState(false);
-    const [showAdvanced, setShowAdvanced] = useState(false);
     const { getToken } = useAuth();
 
-    const handleConnect = async (customToken?: string) => {
+    const handleConnect = async () => {
+        if (!token) return;
+
         setLoading(true);
         try {
             const authToken = await getToken();
-
-            // For real API testing, require manual token entry
-            if (!customToken) {
-                alert('⚠️ Real OAuth not implemented yet!\n\nTo test with REAL API data:\n1. Click "Enter Token Manually"\n2. Paste your real OAuth token\n3. Connect');
-                setLoading(false);
-                setShowAdvanced(true);
-                return;
-            }
-
             const apiUrl = getApiUrl();
+
             await axios.post(`${apiUrl}/connections`, {
                 provider: provider.toLowerCase(),
-                token: customToken, // Real token provided by user
+                token: token,
                 metadata: { type: 'manual' }
             }, {
                 headers: { Authorization: `Bearer ${authToken}` }
             });
+
             onConnected();
             onClose();
-            setToken(''); // Clear for next use
+            setToken('');
         } catch (error) {
             console.error('Failed to connect:', error);
-            alert('Failed to connect. Please try again.');
+            alert('Failed to connect. Please check your API key and try again.');
         } finally {
             setLoading(false);
         }
     };
 
-    const renderContent = () => {
-        const p = provider.toLowerCase();
-
-        if (p === 'aws') {
-            return (
-                <div className="grid gap-4 py-4">
-                    <div className="bg-blue-50 p-4 rounded-md text-sm text-blue-800 mb-2">
-                        Recommended: Use our CloudFormation template to create a secure, read-only role.
-                    </div>
-                    <Button className="w-full" variant="outline" onClick={() => window.open('#', '_blank')}>
-                        🚀 Launch CloudFormation Stack
-                    </Button>
-
-                    <div className="text-center text-xs text-muted-foreground my-2">- OR -</div>
-
-                    <div className="text-sm font-medium cursor-pointer text-blue-600 hover:underline text-center" onClick={() => setShowAdvanced(!showAdvanced)}>
-                        {showAdvanced ? 'Hide Advanced' : 'Enter Access Keys (Advanced)'}
-                    </div>
-
-                    {showAdvanced && (
-                        <div className="grid gap-2 animate-in fade-in slide-in-from-top-2">
-                            <Label htmlFor="token">Access Key ID & Secret</Label>
-                            <Input
-                                id="token"
-                                value={token}
-                                onChange={(e) => setToken(e.target.value)}
-                                placeholder="AKIA..."
-                            />
-                            <Button onClick={() => handleConnect(token)} disabled={loading || !token}>
-                                {loading ? 'Connecting...' : 'Connect Manually'}
-                            </Button>
-                        </div>
-                    )}
-                </div>
-            );
+    const getProviderInstructions = (p: string) => {
+        switch (p.toLowerCase()) {
+            case 'github':
+                return {
+                    label: 'Personal Access Token',
+                    placeholder: 'ghp_...',
+                    help: 'Settings → Developer settings → Personal access tokens (Tokens (classic)). Scopes: repo, read:org, read:user.',
+                    link: 'https://github.com/settings/tokens'
+                };
+            case 'vercel':
+                return {
+                    label: 'Access Token',
+                    placeholder: 'Enter your Vercel token...',
+                    help: 'Account Settings → Tokens. Create a token with "Read Only" scope.',
+                    link: 'https://vercel.com/account/tokens'
+                };
+            case 'aws':
+                return {
+                    label: 'Access Key ID & Secret Access Key',
+                    placeholder: '{"accessKeyId": "AKIA...", "secretAccessKey": "..."}',
+                    help: 'Create an IAM user with ReadOnlyAccess. Paste as JSON: {"accessKeyId": "...", "secretAccessKey": "..."}',
+                    link: 'https://console.aws.amazon.com/iam/home#/users'
+                };
+            case 'sentry':
+                return {
+                    label: 'Auth Token',
+                    placeholder: 'Enter your Sentry token...',
+                    help: 'Settings → Auth Tokens. Scopes: project:read, org:read.',
+                    link: 'https://sentry.io/settings/auth-tokens/'
+                };
+            case 'linear':
+                return {
+                    label: 'API Key',
+                    placeholder: 'lin_api_...',
+                    help: 'Settings → API. Create a new Personal API Key.',
+                    link: 'https://linear.app/settings/api'
+                };
+            case 'resend':
+                return {
+                    label: 'API Key',
+                    placeholder: 're_...',
+                    help: 'API Keys → Create API Key. Permission: Full Access or Sending Access.',
+                    link: 'https://resend.com/api-keys'
+                };
+            case 'clerk':
+                return {
+                    label: 'Secret Key',
+                    placeholder: 'sk_...',
+                    help: 'Dashboard → API Keys → Secret keys.',
+                    link: 'https://dashboard.clerk.com/'
+                };
+            case 'stripe':
+                return {
+                    label: 'Restricted Key',
+                    placeholder: 'rk_...',
+                    help: 'Developers → API keys → Create restricted key. Permissions: Read-only for Customers, Subscriptions, Invoices.',
+                    link: 'https://dashboard.stripe.com/apikeys'
+                };
+            default:
+                return {
+                    label: 'API Token',
+                    placeholder: 'Paste your token...',
+                    help: 'Enter the API token for this service.',
+                    link: ''
+                };
         }
-
-        if (p === 'resend') {
-            return (
-                <div className="grid gap-4 py-4">
-                    <p className="text-sm text-muted-foreground">
-                        Connect your Resend account to analyze email usage.
-                    </p>
-                    <Button onClick={() => handleConnect()} disabled={loading} className="w-full bg-black text-white hover:bg-gray-800">
-                        {loading ? 'Connecting...' : 'Authorize with Resend'}
-                    </Button>
-
-                    <div className="text-center text-xs text-muted-foreground my-2">- OR -</div>
-
-                    <div className="text-sm font-medium cursor-pointer text-blue-600 hover:underline text-center" onClick={() => setShowAdvanced(!showAdvanced)}>
-                        {showAdvanced ? 'Hide Advanced' : 'Enter API Key'}
-                    </div>
-
-                    {showAdvanced && (
-                        <div className="grid gap-2">
-                            <Label htmlFor="token">API Key</Label>
-                            <Input
-                                id="token"
-                                value={token}
-                                onChange={(e) => setToken(e.target.value)}
-                                placeholder="re_..."
-                            />
-                            <Button onClick={() => handleConnect(token)} disabled={loading || !token}>
-                                {loading ? 'Connecting...' : 'Connect Manually'}
-                            </Button>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-
-        // GitHub, Vercel, etc. - Show manual token entry prominently
-        return (
-            <div className="grid gap-4 py-4">
-                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md text-sm">
-                    <p className="font-semibold text-yellow-800 mb-2">⚠️ OAuth Flow Not Implemented</p>
-                    <p className="text-yellow-700 text-xs">
-                        Full OAuth is planned for production. For now, enter your token manually to test with REAL API data.
-                    </p>
-                </div>
-
-                <div className="space-y-3">
-                    <div>
-                        <Label htmlFor="token" className="text-sm font-medium">
-                            {p === 'github' && '🔑 GitHub Personal Access Token'}
-                            {p === 'vercel' && '🔑 Vercel Access Token'}
-                            {p === 'sentry' && '🔑 Sentry Auth Token'}
-                            {p === 'linear' && '🔑 Linear API Key'}
-                            {!['github', 'vercel', 'sentry', 'linear'].includes(p) && `🔑 ${provider} Token`}
-                        </Label>
-                        <p className="text-xs text-muted-foreground mt-1 mb-2">
-                            {p === 'github' && 'Get it from: Settings → Developer → Personal Access Tokens'}
-                            {p === 'vercel' && 'Get it from: Account Settings → Tokens'}
-                            {p === 'sentry' && 'Get it from: Settings → Auth Tokens'}
-                            {p === 'linear' && 'Get it from: Settings → API'}
-                        </p>
-                        <Input
-                            id="token"
-                            type="password"
-                            value={token}
-                            onChange={(e) => setToken(e.target.value)}
-                            placeholder={
-                                p === 'github' ? 'ghp_...' :
-                                    p === 'vercel' ? 'Vercel token...' :
-                                        p === 'sentry' ? 'Sentry token...' :
-                                            'Paste your token...'
-                            }
-                            className="font-mono text-sm"
-                        />
-                    </div>
-
-                    <Button
-                        onClick={() => handleConnect(token)}
-                        disabled={loading || !token}
-                        className="w-full"
-                    >
-                        {loading ? 'Connecting...' : `Connect ${provider} with Real Token`}
-                    </Button>
-
-                    <div className="text-xs text-center text-muted-foreground">
-                        Token is encrypted and stored securely in your database
-                    </div>
-                </div>
-            </div>
-        );
     };
+
+    const instructions = getProviderInstructions(provider);
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white">
                 <DialogHeader>
-                    <DialogTitle>Connect {provider}</DialogTitle>
-                    <DialogDescription>
-                        Securely connect your {provider} account to scan for savings.
+                    <DialogTitle className="flex items-center gap-2 text-xl">
+                        <div className="p-2 rounded-lg bg-slate-800">
+                            <Key className="w-5 h-5 text-emerald-400" />
+                        </div>
+                        Connect {provider}
+                    </DialogTitle>
+                    <DialogDescription className="text-slate-400">
+                        Enter your API credentials to securely connect {provider}. We use bank-level encryption and only request read access.
                     </DialogDescription>
                 </DialogHeader>
-                {renderContent()}
+
+                <div className="grid gap-6 py-4">
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="token" className="text-sm font-medium text-slate-200">
+                                {instructions.label}
+                            </Label>
+                            <Input
+                                id="token"
+                                type="password"
+                                value={token}
+                                onChange={(e) => setToken(e.target.value)}
+                                placeholder={instructions.placeholder}
+                                className="font-mono text-sm bg-slate-950 border-slate-800 focus:border-emerald-500 focus:ring-emerald-500/20"
+                            />
+                        </div>
+
+                        <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-800">
+                            <div className="flex items-start gap-3">
+                                <AlertCircle className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                                <div className="space-y-2">
+                                    <p className="text-sm text-slate-300">
+                                        {instructions.help}
+                                    </p>
+                                    {instructions.link && (
+                                        <a
+                                            href={instructions.link}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center text-xs text-emerald-400 hover:text-emerald-300 hover:underline"
+                                        >
+                                            Open {provider} Settings <ExternalLink className="w-3 h-3 ml-1" />
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <Button
+                        onClick={handleConnect}
+                        disabled={loading || !token}
+                        className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold shadow-lg shadow-emerald-500/20"
+                    >
+                        {loading ? (
+                            <div className="flex items-center gap-2">
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                Connecting...
+                            </div>
+                        ) : (
+                            <>
+                                <CheckCircle2 className="w-4 h-4 mr-2" />
+                                Connect {provider}
+                            </>
+                        )}
+                    </Button>
+
+                    <p className="text-xs text-center text-slate-500">
+                        Your credentials are encrypted with AES-256 before storage.
+                    </p>
+                </div>
             </DialogContent>
         </Dialog>
     );

@@ -5,9 +5,10 @@ import { connectDB } from './config/db';
 import userRoutes from './routes/userRoutes';
 import connectionRoutes from './routes/connectionRoutes';
 import scanRoutes from './routes/scanRoutes';
-import stripeRoutes from './routes/stripeRoutes';
 import waitlistRoutes from './routes/waitlistRoutes';
 import notificationRoutes from './routes/notificationRoutes';
+import robotRoutes from './routes/robotRoutes';
+import paymentRoutes from './routes/paymentRoutes';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
@@ -87,9 +88,6 @@ app.use((req, res, next) => {
     next();
 });
 
-// Stripe webhook must be before express.json() to get raw body
-app.use('/api/stripe', stripeRoutes);
-
 app.use(express.json());
 
 // Connect to Database
@@ -101,6 +99,8 @@ app.use('/api/connections', connectionRoutes);
 app.use('/api/scan', scanRoutes);
 app.use('/api/waitlist', waitlistRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/robot', robotRoutes);
+app.use('/api/payment', paymentRoutes);
 
 // Basic Route
 app.get('/', (req, res) => {

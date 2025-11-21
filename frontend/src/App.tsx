@@ -16,6 +16,8 @@ import DocsSecurity from "./pages/docs/DocsSecurity";
 import DocsFAQ from "./pages/docs/DocsFAQ";
 import DocsPricing from "./pages/docs/DocsPricing";
 import Demo from "./pages/Demo";
+import PaymentSuccess from "./pages/PaymentSuccess";
+import PaymentFailure from "./pages/PaymentFailure";
 import { ClerkProvider } from "@clerk/clerk-react";
 import { dark } from "@clerk/themes";
 
@@ -125,6 +127,8 @@ function ClerkProviderWithRoutes() {
           <Route path="pricing" element={<DocsPricing />} />
         </Route>
         <Route path="/demo" element={<Demo />} />
+        <Route path="/payment/success" element={<PaymentSuccess />} />
+        <Route path="/payment/failure" element={<PaymentFailure />} />
       </Routes>
     </ClerkProvider>
   );

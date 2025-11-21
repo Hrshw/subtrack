@@ -15,6 +15,7 @@ const scanResultSchema = new mongoose.Schema({
     reason: { type: String, required: true }, // e.g., "No commits in 92 days"
     smartRecommendation: { type: String }, // AI-generated roast from Gemini
     usesFallback: { type: Boolean, default: false }, // True if Gemini failed
+    rawData: { type: mongoose.Schema.Types.Mixed }, // Store raw API data for debugging/display
     detectedAt: { type: Date, default: Date.now }
 }, { timestamps: true });
 

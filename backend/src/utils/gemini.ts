@@ -1,6 +1,5 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+// backend/utils/ai.ts
+// OpenRouter AI with multi-model fallback support
 
 interface SmartRecommendationParams {
     serviceName: string;
@@ -9,90 +8,234 @@ interface SmartRecommendationParams {
     issue: string; // e.g., "zombie" or "overprovisioned"
 }
 
-/**
- * Generates a smart, roast-y recommendation using Gemini AI
- * Returns a casual, confident line that feels like a rich Indian indie-hacker friend
- * 
- * @example
- * "Bro, you haven't touched GitHub in 90 days. That's ₹18k literally burning every year. Pocket this immediately."
- */
-export async function getSmartRecommendation(params: SmartRecommendationParams): Promise<string> {
-    const { serviceName, rawDataObject, monthlyCostInINR, issue } = params;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
+const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-    // Rock-solid fallback
-    const fallbackRecommendations = {
-        zombie: `You haven't used ${serviceName} in months. That's ₹${monthlyCostInINR.toLocaleString('en-IN')} burning every month, yaar.`,
-        overprovisioned: `${serviceName} is way overprovisioned. You're using like 10% of what you're paying for. Save ₹${monthlyCostInINR.toLocaleString('en-IN')}/month immediately.`,
-        default: `Cancel ${serviceName} and pocket ₹${monthlyCostInINR.toLocaleString('en-IN')}/month. What are you even doing?`
+// List of models in priority order - OpenRouter will try each until one works
+// Free tier models first, then paid but cheap models
+// Note: Some free models may not be available, so we try multiple
+const MODEL_PRIORITY_LIST = [
+    'mistralai/mistral-7b-instruct:free',         // Free tier (confirmed working)
+    'google/gemma-7b-it:free',                    // Free tier
+    'qwen/qwen-2.5-7b-instruct:free',             // Free tier
+    'meta-llama/llama-3.2-3b-instruct:free',      // Free tier (alternative to 8b)
+];
+
+/**
+ * Fallback recommendation templates when all AI models fail
+ */
+const getFallbackRecommendation = (
+    serviceName: string,
+    monthlyCostInINR: number,
+    issue: string
+): string => {
+    const cost = monthlyCostInINR.toLocaleString('en-IN');
+
+    const templates = {
+        zombie: [
+            `Bro, ${serviceName} is just sitting there unused. That's ₹${cost}/month going down the drain!`,
+            `Yaar, you haven't touched ${serviceName} in ages. ₹${cost} every month for nothing!`,
+            `Beta, ${serviceName} is a zombie service. Kill it and save ₹${cost}/month.`
+        ],
+        overprovisioned: [
+            `${serviceName} is way too powerful for what you need. Downsize and save ₹${cost}/month!`,
+            `Your ${serviceName} is overkill, bro. Right-size it and pocket ₹${cost}/month.`,
+            `Overprovisioned alert! ${serviceName} can be smaller. Save ₹${cost}/month immediately.`
+        ],
+        default: [
+            `Cancel ${serviceName} and save ₹${cost}/month right now.`,
+            `You're wasting ₹${cost}/month on ${serviceName}. Time to cut it!`,
+            `${serviceName} = ₹${cost}/month wasted. Cancel it, yaar!`
+        ]
     };
 
-    try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const options = templates[issue as keyof typeof templates] || templates.default;
+    return options[Math.floor(Math.random() * options.length)];
+};
 
-        const prompt = `You are a rich, successful Indian indie hacker giving brutally honest advice to a friend about wasting money on SaaS subscriptions.
+/**
+ * Try fallback models one by one if primary model fails
+ */
+async function tryFallbackModels(
+    prompt: string,
+    primaryModel: string
+): Promise<string> {
+    // Skip primary model (already tried) and try rest
+    const fallbackModels = MODEL_PRIORITY_LIST.filter(m => m !== primaryModel);
+
+    for (const model of fallbackModels) {
+        try {
+            console.log(`Trying fallback model: ${model}...`);
+
+            const response = await fetch(OPENROUTER_API_URL, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+                    'Content-Type': 'application/json',
+                    'HTTP-Referer': process.env.OPENROUTER_REFERRER || 'https://saassaver.vercel.app',
+                    'X-Title': 'SaaSSaver',
+                },
+                body: JSON.stringify({
+                    model: model,
+                    messages: [
+                        {
+                            role: 'user',
+                            content: prompt,
+                        },
+                    ],
+                    temperature: 0.9,
+                    max_tokens: 120,
+                    top_p: 0.95,
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const text = data.choices?.[0]?.message?.content?.trim();
+
+                if (text && text.length >= 5) {
+                    console.log(`✅ Fallback model ${model} succeeded!`);
+                    return text;
+                }
+            }
+
+            // If this model failed, continue to next
+            console.warn(`⚠️ Model ${model} failed, trying next...`);
+
+        } catch (error: any) {
+            console.warn(`⚠️ Model ${model} error:`, error.message);
+            // Continue to next model
+            continue;
+        }
+    }
+
+    throw new Error('All models failed');
+}
+
+/**
+ * Generates a smart, roast-y recommendation using OpenRouter with multi-model fallback
+ * Automatically switches between free and paid models if one fails
+ */
+export async function getSmartRecommendation(
+    params: SmartRecommendationParams,
+    style: 'basic' | 'savage' = 'savage'
+): Promise<string> {
+    const { serviceName, rawDataObject, monthlyCostInINR, issue } = params;
+
+    // If no API key, use fallback templates
+    if (!OPENROUTER_API_KEY) {
+        console.log('⚠️ No OpenRouter API key found, using fallback templates');
+        return getFallbackRecommendation(serviceName, monthlyCostInINR, issue);
+    }
+
+    const prompt = style === 'savage'
+        ? `You are a savage Indian indie hacker roasting a friend for wasting money.
 
 Service: ${serviceName}
-Monthly Cost: ₹${monthlyCostInINR.toLocaleString('en-IN')}
+Cost: ₹${monthlyCostInINR.toLocaleString('en-IN')}/month
 Issue: ${issue}
-Data: ${JSON.stringify(rawDataObject, null, 2)}
+Raw data: ${JSON.stringify(rawDataObject)}
 
-Write a SHORT (max 2 sentences), casual, slightly roasting recommendation that:
-- Uses Indian English slang (bro, yaar, literally burning)
-- Is direct and money-obsessed  
-- Sounds like a friend calling out bad spending
-- Mentions the exact INR amount
-- Uses phrases like "pocket this immediately", "what are you even doing", "burning money"
+Roast them in 1-2 sentences. Use bro/yaar/beta, mention exact ₹ amount, be funny and brutal.`
+        : `Give a short professional tip to save ₹${monthlyCostInINR.toLocaleString('en-IN')}/month on ${serviceName}.`;
 
-Keep it punchy and conversion-focused. No fluff. Just raw truth.`;
+    const primaryModel = MODEL_PRIORITY_LIST[0];
 
-        const result = await model.generateContent(prompt);
-        const response = result.response;
-        const text = response.text();
+    try {
+        console.log(`🚀 Calling OpenRouter with primary model: ${primaryModel}...`);
 
-        // Clean up the response (remove quotes, extra newlines)
-        const cleaned = text
-            .replace(/^["']|["']$/g, '')
-            .replace(/\n+/g, ' ')
-            .trim();
+        const response = await fetch(OPENROUTER_API_URL, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+                'Content-Type': 'application/json',
+                'HTTP-Referer': process.env.OPENROUTER_REFERRER || 'https://saassaver.vercel.app',
+                'X-Title': 'SaaSSaver',
+            },
+            body: JSON.stringify({
+                model: primaryModel,
+                messages: [
+                    {
+                        role: 'user',
+                        content: prompt,
+                    },
+                ],
+                temperature: 0.9,
+                max_tokens: 120,
+                top_p: 0.95,
+            })
+        });
 
-        // Validate length (max 200 chars for UI)
-        if (cleaned.length > 200 || cleaned.length < 10) {
-            throw new Error('Invalid response length');
+        if (!response.ok) {
+            // If rate limited, model unavailable, or token limit reached, try fallback models
+            if (response.status === 429 || response.status === 503 || response.status === 402) {
+                const errorData = await response.json().catch(() => ({}));
+                console.warn(`⚠️ Primary model failed (${response.status}): ${errorData.error?.message || 'Unknown error'}`);
+                console.log(`🔄 Attempting fallback models...`);
+                return await tryFallbackModels(prompt, primaryModel);
+            }
+
+            const errorText = await response.text();
+            throw new Error(`OpenRouter API error (${response.status}): ${errorText}`);
         }
 
-        return cleaned;
-    } catch (error) {
-        console.error('Gemini API error:', error);
+        const data = await response.json();
+        const text = data.choices?.[0]?.message?.content?.trim();
+        const usedModel = data.model; // Which model actually processed the request
 
-        // Use fallback based on issue type
-        if (issue === 'zombie') return fallbackRecommendations.zombie;
-        if (issue === 'overprovisioned') return fallbackRecommendations.overprovisioned;
-        return fallbackRecommendations.default;
+        if (!text || text.length < 5) {
+            throw new Error("Empty or invalid response");
+        }
+
+        console.log(`✅ OpenRouter success (model: ${usedModel}):`, text.substring(0, 100) + '...');
+        return text;
+
+    } catch (error: any) {
+        console.error('❌ OpenRouter primary model failed:', error.message || error);
+
+        // Try fallback models if primary failed
+        try {
+            console.log(`🔄 Attempting fallback models...`);
+            return await tryFallbackModels(prompt, primaryModel);
+        } catch (fallbackError: any) {
+            console.error('❌ All OpenRouter models failed:', fallbackError.message);
+            // If all models fail, use template fallback
+            return getFallbackRecommendation(serviceName, monthlyCostInINR, issue);
+        }
     }
 }
 
 /**
- * Generate recommendations in batch (more efficient for multiple findings)
+ * Batch version - processes multiple recommendations sequentially
+ * Includes delays to avoid rate limits
  */
 export async function getSmartRecommendationsBatch(
     findings: SmartRecommendationParams[]
 ): Promise<Map<string, string>> {
     const recommendations = new Map<string, string>();
 
-    // Process in parallel with a concurrency limit of 3
-    const chunks = [];
-    for (let i = 0; i < findings.length; i += 3) {
-        chunks.push(findings.slice(i, i + 3));
-    }
+    // Process sequentially to avoid rate limits (free tier friendly)
+    for (let i = 0; i < findings.length; i++) {
+        const finding = findings[i];
+        const key = `${finding.serviceName}-${finding.issue}`;
 
-    for (const chunk of chunks) {
-        const promises = chunk.map(async (finding) => {
-            const key = `${finding.serviceName}-${finding.issue}`;
-            const recommendation = await getSmartRecommendation(finding);
-            recommendations.set(key, recommendation);
-        });
+        try {
+            const rec = await getSmartRecommendation(finding, 'savage');
+            recommendations.set(key, rec);
+        } catch (error) {
+            console.error(`Failed to get recommendation for ${key}:`, error);
+            // Use fallback for this specific finding
+            recommendations.set(key, getFallbackRecommendation(
+                finding.serviceName,
+                finding.monthlyCostInINR,
+                finding.issue
+            ));
+        }
 
-        await Promise.all(promises);
+        // Small delay between requests to avoid rate limits (only if multiple findings)
+        if (i < findings.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
     }
 
     return recommendations;

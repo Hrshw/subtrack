@@ -1,5 +1,6 @@
 import { ScanResult } from '../models/ScanResult';
 import { getSmartRecommendation } from '../utils/gemini';
+import { User } from '../models/User';
 
 interface UsageData {
     // Plan information (CRITICAL: Never assume paid plan)
@@ -29,6 +30,12 @@ interface UsageData {
 
     // Generic
     activeUsers?: number;
+
+    // AWS Deep Scan
+    ec2Instances?: any[];
+    rdsInstances?: any[];
+    lambdaFunctions?: number;
+    s3Buckets?: number;
 }
 
 // USD to INR conversion (rough estimate)
@@ -59,7 +66,17 @@ const PLAN_COSTS = {
 };
 
 export class RuleEngine {
-    static async analyze(userId: string, connectionId: string, provider: string, data: UsageData) {
+    static async analyze(userId: string, connectionId: string, provider: string, data: UsageData, userTierArg?: 'free' | 'pro') {
+        let userTier = userTierArg;
+        if (!userTier) {
+            try {
+                const user = await User.findById(userId);
+                userTier = (user?.subscriptionStatus as 'free' | 'pro') || 'free';
+            } catch (e) {
+                console.error("Error fetching user tier", e);
+                userTier = 'free';
+            }
+        }
         const results = [];
 
         switch (provider) {
@@ -179,30 +196,75 @@ export class RuleEngine {
                 break;
 
             case 'aws':
-                // AWS is pay-as-you-go, so zero usage = zero cost (mostly)
-                // Only flag if there are forgotten resources
-                if (data.activeRegions && data.activeRegions.length === 0) {
-                    // This would need actual billing data to be accurate
-                    // For now, skip unless we can confirm actual charges
-                    // results.push({...}); // Commented out - needs real billing data
+                // AWS Deep Scan Logic
+                // Check for stopped EC2 instances (Zombie)
+                if (data.ec2Instances && data.ec2Instances.length > 0) {
+                    const stoppedInstances = data.ec2Instances.filter((i: any) => i.state === 'stopped');
+                    if (stoppedInstances.length > 0) {
+                        results.push({
+                            resourceName: `${stoppedInstances.length} Stopped EC2 Instances`,
+                            resourceType: 'compute',
+                            status: 'zombie',
+                            potentialSavings: stoppedInstances.length * 8 * USD_TO_INR, // EBS storage costs
+                            currency: 'INR',
+                            reason: `${stoppedInstances.length} instances are stopped but incurring EBS storage costs`,
+                            rawData: { count: stoppedInstances.length, instances: stoppedInstances },
+                            issue: 'zombie'
+                        });
+                    }
+
+                    // Check for expensive running instances
+                    const expensiveInstances = data.ec2Instances.filter((i: any) => i.state === 'running' && (i.type.includes('large') || i.type.includes('xlarge')));
+                    if (expensiveInstances.length > 0) {
+                        results.push({
+                            resourceName: `${expensiveInstances.length} Large EC2 Instances`,
+                            resourceType: 'compute',
+                            status: 'downgrade_possible',
+                            potentialSavings: expensiveInstances.length * 40 * USD_TO_INR,
+                            currency: 'INR',
+                            reason: `High cost instance types detected: ${expensiveInstances.map((i: any) => i.type).join(', ')}. Consider rightsizing.`,
+                            rawData: { count: expensiveInstances.length, instances: expensiveInstances },
+                            issue: 'overprovisioned'
+                        });
+                    }
+                }
+
+                // Lambda
+                if (data.lambdaFunctions && data.lambdaFunctions > 0) {
                     results.push({
-                        resourceName: 'AWS Account',
-                        resourceType: 'account',
+                        resourceName: `${data.lambdaFunctions} Lambda Functions`,
+                        resourceType: 'compute',
                         status: 'active',
                         potentialSavings: 0,
                         currency: 'INR',
-                        reason: 'No obvious waste detected (Mock)',
-                        rawData: { activeRegions: [] },
+                        reason: `Active Serverless Architecture (${data.lambdaFunctions} functions)`,
+                        rawData: { count: data.lambdaFunctions },
                         issue: 'none'
                     });
-                } else {
+                }
+
+                // S3 Buckets
+                if (data.s3Buckets && data.s3Buckets > 0) {
+                    results.push({
+                        resourceName: `${data.s3Buckets} S3 Buckets`,
+                        resourceType: 'storage',
+                        status: 'active',
+                        potentialSavings: 0,
+                        currency: 'INR',
+                        reason: `Storage active in ${data.s3Buckets} buckets`,
+                        rawData: { count: data.s3Buckets },
+                        issue: 'none'
+                    });
+                }
+
+                if (!data.ec2Instances && !data.lambdaFunctions && !data.s3Buckets) {
                     results.push({
                         resourceName: 'AWS Account',
                         resourceType: 'account',
                         status: 'active',
                         potentialSavings: 0,
                         currency: 'INR',
-                        reason: 'Active usage detected',
+                        reason: 'No resources detected in scan',
                         rawData: { activeRegions: data.activeRegions || [] },
                         issue: 'none'
                     });
@@ -236,6 +298,45 @@ export class RuleEngine {
                     });
                 }
                 break;
+
+            case 'resend':
+                results.push({
+                    resourceName: `Resend ${data.plan ? data.plan.charAt(0).toUpperCase() + data.plan.slice(1) : 'Free'}`,
+                    resourceType: 'account',
+                    status: 'active',
+                    potentialSavings: 0,
+                    currency: 'INR',
+                    reason: 'Active usage',
+                    rawData: { plan: data.plan || 'free' },
+                    issue: 'none'
+                });
+                break;
+
+            case 'clerk':
+                results.push({
+                    resourceName: `Clerk ${data.plan ? data.plan.charAt(0).toUpperCase() + data.plan.slice(1) : 'Free'}`,
+                    resourceType: 'account',
+                    status: 'active',
+                    potentialSavings: 0,
+                    currency: 'INR',
+                    reason: 'Active usage',
+                    rawData: { plan: data.plan || 'free' },
+                    issue: 'none'
+                });
+                break;
+
+            case 'stripe':
+                results.push({
+                    resourceName: `Stripe ${data.plan ? data.plan.charAt(0).toUpperCase() + data.plan.slice(1) : 'Standard'}`,
+                    resourceType: 'account',
+                    status: 'active',
+                    potentialSavings: 0,
+                    currency: 'INR',
+                    reason: 'Active usage',
+                    rawData: { plan: data.plan || 'standard' },
+                    issue: 'none'
+                });
+                break;
         }
 
         // Save results to DB with AI-generated recommendations
@@ -248,12 +349,13 @@ export class RuleEngine {
             if (result.status !== 'active' && result.potentialSavings > 0) {
                 try {
                     // Generate AI recommendation
+                    const style = userTier === 'pro' ? 'savage' : 'basic';
                     smartRecommendation = await getSmartRecommendation({
                         serviceName: result.resourceName,
                         rawDataObject: result.rawData,
                         monthlyCostInINR: result.potentialSavings,
                         issue: result.issue
-                    });
+                    }, style);
                 } catch (error) {
                     console.error(`Gemini failed for ${result.resourceName}:`, error);
                     // Fallback to reason field
@@ -276,7 +378,8 @@ export class RuleEngine {
                 currency: result.currency,
                 reason: result.reason,
                 smartRecommendation,
-                usesFallback
+                usesFallback,
+                rawData: result.rawData
             });
         }
 

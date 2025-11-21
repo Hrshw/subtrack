@@ -4,11 +4,12 @@ import { Button } from '../components/ui/button';
 import ConnectModal from '../components/ConnectModal';
 import WaitlistModal from '../components/WaitlistModal';
 import OnboardingModal from '../components/OnboardingModal';
+import InsightsSection, { Leak, Connection } from '../components/InsightsSection'; // Import new component and types
 import { getApiUrl } from '../lib/api';
 import axios from 'axios';
 import CountUp from 'react-countup';
 import Confetti from 'react-confetti';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { toast, Toaster } from 'sonner';
 import {
     CheckCircle2,
@@ -16,7 +17,6 @@ import {
     Zap,
     AlertTriangle,
     Share2,
-    Sparkles,
     Crown,
     Settings as SettingsIcon,
     Shield,
@@ -24,33 +24,13 @@ import {
     TrendingUp,
     Wallet,
     Link2,
-    Award,
     Calendar,
-    BarChart3,
     Bell
 } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-
-interface Connection {
-    id: string;
-    provider: string;
-    lastScannedAt?: Date;
-    status: string;
-    metadata?: any;
-}
-
-interface Leak {
-    _id: string;
-    resourceName: string;
-    resourceType: string;
-    status: 'zombie' | 'downgrade_possible' | 'active';
-    potentialSavings: number;
-    currency: string;
-    reason: string;
-    smartRecommendation?: string;
-    usesFallback?: boolean;
-    createdAt: string;
-}
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import RobotAssistant from '../components/RobotAssistant';
 
 const Dashboard = () => {
     const { user } = useUser();
@@ -62,7 +42,6 @@ const Dashboard = () => {
     const [showConfetti, setShowConfetti] = useState(false);
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const [showOnboarding, setShowOnboarding] = useState(false);
-    const [activeTab, setActiveTab] = useState<'leaks' | 'healthy' | 'timeline'>('leaks');
     const [hasSeenBigSavings, setHasSeenBigSavings] = useState(false);
     const [lastScanTime, setLastScanTime] = useState<Date | null>(null);
 
@@ -127,10 +106,7 @@ const Dashboard = () => {
     const activeResources = useMemo(() => leaks.filter(l => l.status === 'active'), [leaks]);
     const actualLeaks = useMemo(() => leaks.filter(l => l.status !== 'active'), [leaks]);
 
-    // Calculate "saved" amount for healthy services (what they're NOT paying)
-    const healthySavings = useMemo(() => {
-        return activeResources.length * 15000; // Avg ₹15k/year per service by using free/optimal plan
-    }, [activeResources.length]);
+
 
     const avgSavingsPerService = useMemo(() => {
         return connections.length > 0 ? Math.round(totalSavings / connections.length) : 0;
@@ -152,16 +128,21 @@ const Dashboard = () => {
         return data;
     }, [totalSavings, actualLeaks.length]);
 
-    // Smart default tab
-    useEffect(() => {
-        if (leaks.length > 0) {
-            if (actualLeaks.length === 0 && activeResources.length > 0) {
-                setActiveTab('healthy');
-            } else if (actualLeaks.length > 0) {
-                setActiveTab('leaks');
-            }
-        }
-    }, [leaks.length, actualLeaks.length, activeResources.length]);
+    const categoryData = useMemo(() => {
+        const categories: Record<string, number> = {};
+        leaks.forEach(leak => {
+            const type = leak.resourceType || 'Other';
+            const name = type.charAt(0).toUpperCase() + type.slice(1);
+            categories[name] = (categories[name] || 0) + (leak.potentialSavings || 0);
+        });
+        return Object.entries(categories)
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value);
+    }, [leaks]);
+
+    const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+
+
 
     // Confetti + Sound for big savings
     useEffect(() => {
@@ -231,8 +212,35 @@ const Dashboard = () => {
         window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
     };
 
+    const handleExportReport = async () => {
+        const element = document.getElementById('dashboard-content');
+        if (!element) return;
+
+        toast.loading('Generating PDF report...', { id: 'pdf-export' });
+
+        try {
+            const canvas = await html2canvas(element, {
+                scale: 2,
+                backgroundColor: '#0a0e17',
+                ignoreElements: (element) => element.classList.contains('no-print')
+            });
+
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            pdf.save(`subtrack-report-${new Date().toISOString().split('T')[0]}.pdf`);
+            toast.success('Report exported successfully!', { id: 'pdf-export' });
+        } catch (error) {
+            console.error('Export failed:', error);
+            toast.error('Failed to export report', { id: 'pdf-export' });
+        }
+    };
+
     return (
-        <div className="min-h-screen bg-[#0a0e17] text-white relative overflow-hidden">
+        <div id="dashboard-content" className="min-h-screen bg-[#0a0e17] text-white relative overflow-hidden">
             {/* Animated Background Orbs */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute top-0 -left-40 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl animate-pulse" />
@@ -257,8 +265,7 @@ const Dashboard = () => {
                             className="h-10 w-auto rounded-lg"
                         />
                         <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                            <span className="text-xs font-medium text-emerald-300">Premium Dashboard</span>
+                            <span className="text-xs font-medium text-emerald-300">Dashboard</span>
                         </div>
                     </div>
 
@@ -277,6 +284,15 @@ const Dashboard = () => {
                                 Pro Launching Soon
                             </Button>
                         )}
+
+                        <Button
+                            variant="outline"
+                            onClick={handleExportReport}
+                            className="hidden md:flex border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-400 mr-2"
+                        >
+                            <Download className="w-4 h-4 mr-2" />
+                            Export Report
+                        </Button>
 
                         <Button
                             variant="ghost"
@@ -457,275 +473,114 @@ const Dashboard = () => {
                     </motion.div>
                 </motion.section>
 
-                {/* Insights Tabs */}
+                {/* Viral Insights Section */}
+                {(actualLeaks.length > 0 || activeResources.length > 0) && (
+                    <InsightsSection
+                        leaks={leaks}
+                        connections={connections}
+                        subscriptionStatus={subscriptionStatus}
+                        lastScanTime={lastScanTime}
+                        onUpgrade={() => setShowUpgradeModal(true)}
+                    />
+                )}
+
+                {/* Detailed Analytics */}
                 {(actualLeaks.length > 0 || activeResources.length > 0) && (
                     <motion.section
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2 }}
-                        className="backdrop-blur-2xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10 rounded-3xl overflow-hidden shadow-2xl"
+                        transition={{ delay: 0.3 }}
+                        className="space-y-8 pt-8 border-t border-white/10"
                     >
-                        {/* Tab Headers */}
-                        <div className="border-b border-white/10 px-6 py-4">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                                <div>
-                                    <h2 className="text-2xl font-black mb-1">Your Insights</h2>
-                                    <p className="text-sm text-slate-400">
-                                        {actualLeaks.length > 0
-                                            ? `${actualLeaks.length} optimization opportunities found`
-                                            : 'All systems optimized 🎉'}
-                                    </p>
-                                </div>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h2 className="text-2xl font-black mb-1">Detailed Analytics</h2>
+                                <p className="text-sm text-slate-400">Deep dive into your savings metrics</p>
+                            </div>
+                        </div>
 
-                                <div className="flex items-center gap-2">
-                                    {actualLeaks.length > 0 && (
-                                        <button
-                                            onClick={() => setActiveTab('leaks')}
-                                            className={`px-4 py-2 rounded-xl font-semibold transition-all ${activeTab === 'leaks'
-                                                ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white shadow-lg'
-                                                : 'bg-white/5 text-slate-400 hover:bg-white/10'
-                                                }`}
-                                        >
-                                            🚨 Issues ({actualLeaks.length})
-                                        </button>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            {/* Savings Trend */}
+                            <div className="space-y-4">
+                                <div>
+                                    <h3 className="text-xl font-black mb-2">Savings Trend</h3>
+                                    <p className="text-sm text-slate-400">Your optimization journey (last 30 days)</p>
+                                </div>
+                                <div className="h-64 w-full bg-slate-900/50 rounded-xl border border-slate-800 p-4">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <AreaChart data={timelineData}>
+                                            <defs>
+                                                <linearGradient id="savingsGradient" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                                </linearGradient>
+                                            </defs>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+                                            <XAxis dataKey="date" stroke="#94a3b8" style={{ fontSize: '10px' }} />
+                                            <YAxis stroke="#94a3b8" style={{ fontSize: '10px' }} />
+                                            <Tooltip
+                                                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                                            />
+                                            <Area type="monotone" dataKey="savings" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#savingsGradient)" />
+                                        </AreaChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+
+                            {/* Category Distribution */}
+                            <div className="space-y-4">
+                                <div>
+                                    <h3 className="text-xl font-black mb-2">Spending by Category</h3>
+                                    <p className="text-sm text-slate-400">Where your potential savings are found</p>
+                                </div>
+                                <div className="h-64 w-full bg-slate-900/50 rounded-xl border border-slate-800 p-4 flex items-center justify-center">
+                                    {categoryData.length > 0 ? (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie
+                                                    data={categoryData}
+                                                    cx="50%"
+                                                    cy="50%"
+                                                    innerRadius={60}
+                                                    outerRadius={80}
+                                                    paddingAngle={5}
+                                                    dataKey="value"
+                                                >
+                                                    {categoryData.map((_, index) => (
+                                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip
+                                                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                                                    formatter={(value: number) => `₹${value.toLocaleString()}`}
+                                                />
+                                                <Legend />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    ) : (
+                                        <div className="text-slate-500 text-sm">No data available</div>
                                     )}
-                                    {activeResources.length > 0 && (
-                                        <button
-                                            onClick={() => setActiveTab('healthy')}
-                                            className={`px-4 py-2 rounded-xl font-semibold transition-all ${activeTab === 'healthy'
-                                                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg'
-                                                : 'bg-white/5 text-slate-400 hover:bg-white/10'
-                                                }`}
-                                        >
-                                            ✅ Healthy ({activeResources.length})
-                                        </button>
-                                    )}
-                                    <button
-                                        onClick={() => setActiveTab('timeline')}
-                                        className={`px-4 py-2 rounded-xl font-semibold transition-all ${activeTab === 'timeline'
-                                            ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg'
-                                            : 'bg-white/5 text-slate-400 hover:bg-white/10'
-                                            }`}
-                                    >
-                                        <BarChart3 className="w-4 h-4 inline mr-1" />
-                                        Timeline
-                                    </button>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Tab Content */}
-                        <div className="p-6">
-                            <AnimatePresence mode="wait">
-                                {/* Active Leaks Tab */}
-                                {activeTab === 'leaks' && (
-                                    <motion.div
-                                        key="leaks"
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: 20 }}
-                                        className="space-y-3"
-                                    >
-                                        {actualLeaks.map((leak, idx) => (
-                                            <motion.div
-                                                key={leak._id}
-                                                initial={{ opacity: 0, y: 20 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                transition={{ delay: idx * 0.05 }}
-                                                className="backdrop-blur-xl bg-gradient-to-br from-white/5 to-white/3 border border-white/10 rounded-2xl p-5 hover:border-red-500/30 transition-all group"
-                                            >
-                                                <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-                                                    <div className="flex-1 space-y-3">
-                                                        <div className="flex items-start gap-3">
-                                                            <div className={`mt-1 w-3 h-3 rounded-full flex-shrink-0 ${leak.status === 'zombie' ? 'bg-red-500 animate-pulse' : 'bg-amber-500 animate-pulse'
-                                                                }`} />
-                                                            <div className="flex-1">
-                                                                <div className="flex items-center gap-2 flex-wrap mb-1">
-                                                                    <h3 className="font-black text-xl">{leak.resourceName}</h3>
-                                                                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${leak.status === 'zombie'
-                                                                        ? 'bg-red-500/20 text-red-300 border border-red-500/30'
-                                                                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                                                        }`}>
-                                                                        {leak.status === 'zombie' ? '🧟 Zombie' : '📉 Downgrade'}
-                                                                    </span>
-                                                                    {leak.smartRecommendation && !leak.usesFallback && (
-                                                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30">
-                                                                            <Sparkles className="w-3 h-3 text-purple-300" />
-                                                                            <span className="text-xs font-semibold text-purple-300">AI</span>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                                <p className="text-sm text-slate-400 capitalize">{leak.resourceType}</p>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="pl-6">
-                                                            <p className="text-sm text-slate-300 leading-relaxed">
-                                                                {leak.smartRecommendation || leak.reason}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="flex items-center gap-4 pl-6 lg:pl-0">
-                                                        <div className="text-right">
-                                                            <div className={`text-4xl font-black ${leak.status === 'zombie' ? 'text-red-400' : 'text-amber-400'
-                                                                }`}>
-                                                                ₹{leak.potentialSavings.toLocaleString('en-IN')}
-                                                            </div>
-                                                            <p className="text-xs text-slate-500 mt-1">per month</p>
-                                                        </div>
-                                                        <Button
-                                                            size="sm"
-                                                            className={`${leak.status === 'zombie'
-                                                                ? 'bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-500/40'
-                                                                : 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40'
-                                                                } font-bold`}
-                                                        >
-                                                            {leak.status === 'zombie' ? 'Cancel' : 'Optimize'} →
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            </motion.div>
-                                        ))}
-                                    </motion.div>
-                                )}
-
-                                {/* Healthy Wins Tab */}
-                                {activeTab === 'healthy' && (
-                                    <motion.div
-                                        key="healthy"
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: 20 }}
-                                        className="space-y-4"
-                                    >
-                                        {/* Celebration Header */}
-                                        <div className="text-center py-8">
-                                            <motion.div
-                                                animate={{ scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }}
-                                                transition={{ duration: 2, repeat: Infinity }}
-                                                className="text-7xl mb-4"
-                                            >
-                                                🏆
-                                            </motion.div>
-                                            <h3 className="text-3xl font-black mb-2">You're a Cost Champion!</h3>
-                                            <p className="text-slate-300 text-lg mb-4">
-                                                {activeResources.length} {activeResources.length === 1 ? 'service' : 'services'} running on optimal plans
-                                            </p>
-                                            <div className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30">
-                                                <Award className="w-5 h-5 text-emerald-400" />
-                                                <span className="text-lg font-bold text-emerald-300">
-                                                    Saved ₹{healthySavings.toLocaleString('en-IN')}/year by staying optimal
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        {activeResources.map((resource, idx) => (
-                                            <motion.div
-                                                key={resource._id}
-                                                initial={{ opacity: 0, y: 20 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                transition={{ delay: idx * 0.05 }}
-                                                whileHover={{ scale: 1.01 }}
-                                                className="backdrop-blur-xl bg-gradient-to-br from-emerald-500/10 to-white/5 border border-emerald-500/20 rounded-2xl p-6"
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-4">
-                                                        <motion.div
-                                                            animate={{ scale: [1, 1.2, 1] }}
-                                                            transition={{ duration: 2, repeat: Infinity }}
-                                                            className="w-4 h-4 rounded-full bg-emerald-500"
-                                                        />
-                                                        <div>
-                                                            <h4 className="font-black text-xl mb-1">{resource.resourceName}</h4>
-                                                            <p className="text-sm text-emerald-300 font-semibold">
-                                                                ✨ {resource.smartRecommendation || resource.reason}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <div className="text-2xl font-black text-emerald-400">✅ Optimal</div>
-                                                        <p className="text-xs text-slate-400">Keep it up!</p>
-                                                    </div>
-                                                </div>
-                                            </motion.div>
-                                        ))}
-                                    </motion.div>
-                                )}
-
-                                {/* Timeline Tab */}
-                                {activeTab === 'timeline' && (
-                                    <motion.div
-                                        key="timeline"
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: 20 }}
-                                        className="space-y-6"
-                                    >
-                                        <div>
-                                            <h3 className="text-xl font-black mb-2">Savings Over Time</h3>
-                                            <p className="text-sm text-slate-400">Your optimization journey (last 30 days)</p>
-                                        </div>
-
-                                        <div className="h-80 w-full">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <AreaChart data={timelineData}>
-                                                    <defs>
-                                                        <linearGradient id="savingsGradient" x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                                                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                                                        </linearGradient>
-                                                    </defs>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-                                                    <XAxis
-                                                        dataKey="date"
-                                                        stroke="#94a3b8"
-                                                        style={{ fontSize: '12px' }}
-                                                    />
-                                                    <YAxis
-                                                        stroke="#94a3b8"
-                                                        style={{ fontSize: '12px' }}
-                                                    />
-                                                    <Tooltip
-                                                        contentStyle={{
-                                                            backgroundColor: '#1e293b',
-                                                            border: '1px solid #334155',
-                                                            borderRadius: '8px'
-                                                        }}
-                                                    />
-                                                    <Area
-                                                        type="monotone"
-                                                        dataKey="savings"
-                                                        stroke="#10b981"
-                                                        strokeWidth={3}
-                                                        fillOpacity={1}
-                                                        fill="url(#savingsGradient)"
-                                                    />
-                                                </AreaChart>
-                                            </ResponsiveContainer>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-xl p-4">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <TrendingUp className="w-5 h-5 text-emerald-400" />
-                                                    <p className="text-sm text-slate-400">Projected Yearly</p>
-                                                </div>
-                                                <p className="text-3xl font-black text-emerald-400">
-                                                    ₹{(totalSavings * 12).toLocaleString('en-IN')}
-                                                </p>
-                                            </div>
-                                            <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-xl p-4">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <Calendar className="w-5 h-5 text-blue-400" />
-                                                    <p className="text-sm text-slate-400">Total Scans</p>
-                                                </div>
-                                                <p className="text-3xl font-black text-blue-400">{leaks.length}</p>
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-xl p-4">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <TrendingUp className="w-5 h-5 text-emerald-400" />
+                                    <p className="text-sm text-slate-400">Projected Yearly</p>
+                                </div>
+                                <p className="text-3xl font-black text-emerald-400">
+                                    ₹{(totalSavings * 12).toLocaleString('en-IN')}
+                                </p>
+                            </div>
+                            <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-xl p-4">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <Calendar className="w-5 h-5 text-blue-400" />
+                                    <p className="text-sm text-slate-400">Total Scans</p>
+                                </div>
+                                <p className="text-3xl font-black text-blue-400">{leaks.length}</p>
+                            </div>
                         </div>
                     </motion.section>
                 )}
@@ -764,7 +619,7 @@ const Dashboard = () => {
                                 onClick={() => setShowOnboarding(true)}
                                 className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-lg px-8 font-bold"
                             >
-                                <Sparkles className="w-5 h-5 mr-2" />
+                                <img src="/logo/logo-subTrack.jpg" alt="Logo" className="w-5 h-5 mr-2 rounded-full" />
                                 Connect Your First Service
                             </Button>
                         </motion.div>
@@ -805,13 +660,42 @@ const Dashboard = () => {
                                         <h3 className="font-black text-lg mb-3">{provider.name}</h3>
 
                                         {isConnected ? (
-                                            <div className="space-y-2">
-                                                <div className="flex items-center gap-1.5 text-xs text-emerald-400">
-                                                    <Clock className="w-3 h-3" />
-                                                    Scanned {connection?.lastScannedAt ? new Date(connection.lastScannedAt).toLocaleDateString() : 'recently'}
+                                            <div className="space-y-3">
+                                                <div className="flex items-center justify-between text-xs bg-white/5 p-2 rounded-lg">
+                                                    <span className="text-slate-400 flex items-center gap-1">
+                                                        <Clock className="w-3 h-3" /> Scanned
+                                                    </span>
+                                                    <span className="text-slate-200 font-medium">
+                                                        {connection?.lastScannedAt ? new Date(connection.lastScannedAt).toLocaleDateString() : 'Just now'}
+                                                    </span>
                                                 </div>
-                                                <div className="px-3 py-2 bg-emerald-500/10 rounded-lg text-xs text-emerald-400 font-bold text-center border border-emerald-500/20">
-                                                    ✓ Connected
+
+                                                {(() => {
+                                                    const providerLeaks = leaks.filter(l => l.connectionId === connection?._id);
+                                                    const providerSavings = providerLeaks.reduce((sum, l) => sum + l.potentialSavings, 0);
+
+                                                    return (
+                                                        <>
+                                                            <div className="flex items-center justify-between text-xs px-1">
+                                                                <span className="text-slate-400">Issues found</span>
+                                                                <span className={`font-bold ${providerLeaks.length > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                                                    {providerLeaks.length}
+                                                                </span>
+                                                            </div>
+
+                                                            {providerSavings > 0 && (
+                                                                <div className="flex items-center justify-between text-xs px-1">
+                                                                    <span className="text-slate-400">Potential savings</span>
+                                                                    <span className="text-emerald-400 font-bold">₹{providerSavings.toLocaleString('en-IN')}</span>
+                                                                </div>
+                                                            )}
+                                                        </>
+                                                    );
+                                                })()}
+
+                                                <div className="px-3 py-2 bg-emerald-500/10 rounded-lg text-xs text-emerald-400 font-bold text-center border border-emerald-500/20 flex items-center justify-center gap-2">
+                                                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                                                    Active & Monitoring
                                                 </div>
                                             </div>
                                         ) : (
@@ -853,7 +737,6 @@ const Dashboard = () => {
                         <div>Revoke anytime</div>
                         <div className="hidden md:block">•</div>
                         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20">
-                            <Sparkles className="w-3 h-3 text-purple-400" />
                             <span className="text-purple-300 font-semibold">Powered by Gemini AI</span>
                         </div>
                     </div>
@@ -861,26 +744,21 @@ const Dashboard = () => {
             </main>
 
             {/* Modals */}
-            {selectedProvider && (
-                <ConnectModal
-                    isOpen={!!selectedProvider}
-                    onClose={() => setSelectedProvider(null)}
-                    provider={selectedProvider}
-                    onConnected={() => {
-                        setSelectedProvider(null);
-                        fetchData();
-                        handleScan(); // Auto-scan new connection
-                        toast.success(`${selectedProvider} connected! Scanning now...`);
-                    }}
-                />
-            )}
-
+            <ConnectModal
+                isOpen={!!selectedProvider}
+                onClose={() => setSelectedProvider(null)}
+                provider={selectedProvider || ''}
+                onConnected={() => {
+                    setSelectedProvider(null);
+                    fetchData();
+                    toast.success(`Successfully connected to ${selectedProvider}`);
+                }}
+            />
             <WaitlistModal
                 isOpen={showUpgradeModal}
                 onClose={() => setShowUpgradeModal(false)}
                 potentialSavings={totalSavings}
             />
-
             <OnboardingModal
                 isOpen={showOnboarding}
                 onClose={() => setShowOnboarding(false)}
@@ -889,6 +767,10 @@ const Dashboard = () => {
                     setSelectedProvider(provider);
                 }}
             />
+
+            <div className="no-print">
+                <RobotAssistant />
+            </div>
         </div>
     );
 };

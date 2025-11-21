@@ -2,9 +2,9 @@ import React, { useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import Navbar from '../components/Navbar';
+import Footer from '../components/Footer';
 import { motion, useScroll, useTransform, useSpring, useMotionValue } from 'framer-motion';
 import {
-    Sparkles,
     Zap,
     Shield,
     TrendingUp,
@@ -411,21 +411,7 @@ const LandingPage = () => {
                 </section>
             </main>
 
-            <footer className="border-t border-slate-800 py-12 bg-slate-950 relative z-10">
-                <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6 text-slate-500 text-sm">
-                    <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                            <Sparkles className="w-3 h-3 text-emerald-500" />
-                        </div>
-                        © 2025 SubTrack. All rights reserved.
-                    </div>
-                    <div className="flex gap-8">
-                        <Link to="/privacy" className="hover:text-white transition-colors">Privacy</Link>
-                        <Link to="/terms" className="hover:text-white transition-colors">Terms</Link>
-                        <Link to="/eula" className="hover:text-white transition-colors">EULA</Link>
-                    </div>
-                </div>
-            </footer>
+            <Footer />
         </div>
     );
 };

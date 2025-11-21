@@ -4,6 +4,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import { motion } from 'framer-motion';
 import { Book, Shield, HelpCircle, CreditCard, ArrowLeft, Menu, X } from 'lucide-react';
 import { Button } from '../components/ui/button';
+import Footer from '../components/Footer';
 
 const DocsLayout = () => {
     const location = useLocation();
@@ -81,8 +82,8 @@ const DocsLayout = () => {
                                                     key={item.to}
                                                     to={item.to}
                                                     className={`block px-3 py-2 text-sm rounded-lg transition-colors ${isActive(item.to)
-                                                            ? 'bg-emerald-500/10 text-emerald-400 font-medium'
-                                                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                                        ? 'bg-emerald-500/10 text-emerald-400 font-medium'
+                                                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
                                                         }`}
                                                     onClick={() => setIsMobileMenuOpen(false)}
                                                 >
@@ -94,8 +95,8 @@ const DocsLayout = () => {
                                         <Link
                                             to={link.to!}
                                             className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${isActive(link.to!)
-                                                    ? 'bg-emerald-500/10 text-emerald-400 font-medium'
-                                                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                                ? 'bg-emerald-500/10 text-emerald-400 font-medium'
+                                                : 'text-slate-400 hover:text-white hover:bg-slate-800'
                                                 }`}
                                             onClick={() => setIsMobileMenuOpen(false)}
                                         >
@@ -121,9 +122,7 @@ const DocsLayout = () => {
                         </motion.div>
                     </div>
 
-                    <footer className="border-t border-slate-800 mt-12 py-8 text-center text-sm text-slate-500">
-                        <p>© 2025 SubTrack. All rights reserved.</p>
-                    </footer>
+                    <Footer />
                 </main>
             </div>
         </HelmetProvider>
