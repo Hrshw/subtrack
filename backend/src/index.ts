@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
 import { connectDB } from './config/db';
 import userRoutes from './routes/userRoutes';
 import connectionRoutes from './routes/connectionRoutes';
@@ -9,6 +10,7 @@ import waitlistRoutes from './routes/waitlistRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import robotRoutes from './routes/robotRoutes';
 import paymentRoutes from './routes/paymentRoutes';
+import oauthRoutes from './routes/oauthRoutes';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
@@ -24,8 +26,13 @@ const allowedOrigins = [
         .filter(Boolean)
         .flatMap(origin => origin!.split(','))
         .map(origin => origin.trim().replace(/\/$/, '')),
+    // Production domain
+    'https://subtrack.pulseguard.in',
+    'http://subtrack.pulseguard.in',
+    // Development
     'http://localhost:5173',
     'http://localhost:3000',
+    'http://localhost:5000',
 ];
 
 // CORS middleware with explicit configuration
@@ -101,14 +108,14 @@ app.use('/api/waitlist', waitlistRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/robot', robotRoutes);
 app.use('/api/payment', paymentRoutes);
+app.use('/api/oauth', oauthRoutes);
 
-// Basic Route
-app.get('/', (req, res) => {
-    res.send('SubTrack API is running');
-});
+// Serve static frontend files from 'public' directory
+const publicPath = path.join(__dirname, '..', 'public');
+app.use(express.static(publicPath));
 
-// Health check endpoint
-app.get('/health', (req, res) => {
+// Health check endpoint (API routes take priority)
+app.get('/api/health', (req, res) => {
     res.status(200).json({
         status: 'ok',
         timestamp: new Date().toISOString(),
@@ -117,7 +124,7 @@ app.get('/health', (req, res) => {
 });
 
 // CORS debug endpoint
-app.get('/cors-debug', (req, res) => {
+app.get('/api/cors-debug', (req, res) => {
     res.status(200).json({
         origin: req.headers.origin,
         allowedOrigins: allowedOrigins,
@@ -125,6 +132,17 @@ app.get('/cors-debug', (req, res) => {
         clientUrls: process.env.CLIENT_URLS,
         nodeEnv: process.env.NODE_ENV
     });
+});
+
+// SPA catch-all: serve index.html for any non-API route (React Router handles client-side routing)
+// Express 5.x requires named wildcards: use '*path' instead of '*'
+app.get('/{*path}', (req, res) => {
+    // Only serve index.html for non-API routes
+    if (!req.path.startsWith('/api')) {
+        res.sendFile(path.join(publicPath, 'index.html'));
+    } else {
+        res.status(404).json({ error: 'API endpoint not found' });
+    }
 });
 
 // Error handling middleware

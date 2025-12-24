@@ -33,8 +33,8 @@ export class PayUService {
                 firstname: user.email.split('@')[0], // Use email username as firstname
                 email: userEmail,
                 phone: '9999999999', // Default - user can update on PayU page
-                surl: `${process.env.CLIENT_URL}/payment/success`, // Success URL
-                furl: `${process.env.CLIENT_URL}/payment/failure`, // Failure URL
+                surl: `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/payment/success`, // Success callback to backend
+                furl: `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/payment/failure`, // Failure callback to backend
                 udf1: userId, // Store userId for webhook processing
                 udf2: plan,
                 udf3: '',

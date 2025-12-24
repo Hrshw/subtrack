@@ -144,7 +144,7 @@ const Terms = () => {
                         <h2 className="text-3xl font-bold text-white mb-4">14. Contact</h2>
                         <p>For questions about these Terms:</p>
                         <ul className="list-disc ml-6 space-y-2 mt-4">
-                            <li>Email: <a href="mailto:legal@subtrack.app" className="text-emerald-400 hover:underline">legal@subtrack.app</a></li>
+                            <li>Email: <a href="mailto:support@untuuga.resend.app" className="text-emerald-400 hover:underline">support@untuuga.resend.app</a></li>
                             <li>Support: <a href="/support" className="text-emerald-400 hover:underline">Help Center</a></li>
                         </ul>
                     </section>

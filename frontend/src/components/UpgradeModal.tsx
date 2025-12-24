@@ -3,10 +3,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from './ui/button';
 import { motion } from 'framer-motion';
 import { Crown, Check, Zap, TrendingUp, Lock, Sparkles } from 'lucide-react';
-import { useAuth } from '@clerk/clerk-react';
-import { getApiUrl } from '../lib/api';
-import axios from 'axios';
-import { toast } from 'sonner';
 
 interface UpgradeModalProps {
     isOpen: boolean;
@@ -15,26 +11,9 @@ interface UpgradeModalProps {
 }
 
 const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, potentialSavings }) => {
-    const { getToken } = useAuth();
-    const [loading, setLoading] = React.useState(false);
-
-    const handleUpgrade = async () => {
-        setLoading(true);
-        try {
-            const token = await getToken();
-            const apiUrl = getApiUrl();
-            const response = await axios.post(
-                `${apiUrl}/stripe/create-checkout-session`,
-                {},
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-            window.location.href = response.data.url;
-        } catch (error) {
-            console.error('Upgrade failed:', error);
-            toast.error('Failed to start upgrade. Please try again.');
-        } finally {
-            setLoading(false);
-        }
+    const handleUpgrade = () => {
+        // Redirect to checkout page
+        window.location.href = '/checkout';
     };
 
     const roi = potentialSavings > 0 ? Math.round(potentialSavings / 799) : 0;
@@ -97,8 +76,8 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, potentialS
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ delay: idx * 0.1 }}
                                 className={`flex items-center gap-3 p-3 rounded-xl ${feature.highlight
-                                        ? 'bg-emerald-500/10 border border-emerald-500/30'
-                                        : 'bg-slate-800/50'
+                                    ? 'bg-emerald-500/10 border border-emerald-500/30'
+                                    : 'bg-slate-800/50'
                                     }`}
                             >
                                 <feature.icon className={`w-5 h-5 ${feature.highlight ? 'text-emerald-400' : 'text-slate-400'}`} />
@@ -111,25 +90,14 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, potentialS
                     <div className="space-y-3">
                         <Button
                             onClick={handleUpgrade}
-                            disabled={loading}
                             size="lg"
                             className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold text-lg py-6 shadow-2xl shadow-emerald-500/50"
                         >
-                            {loading ? (
-                                <motion.div
-                                    animate={{ rotate: 360 }}
-                                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                                    className="w-5 h-5 border-2 border-white border-t-transparent rounded-full"
-                                />
-                            ) : (
-                                <>
-                                    <Crown className="w-5 h-5 mr-2" />
-                                    Upgrade to Pro Now
-                                </>
-                            )}
+                            <Crown className="w-5 h-5 mr-2" />
+                            Upgrade to Pro Now
                         </Button>
                         <p className="text-center text-xs text-slate-400">
-                            Secure payment via Stripe • Cancel anytime • 30-day money-back guarantee
+                            Secure payment via PayU • Cancel anytime • 7-day money-back guarantee
                         </p>
                     </div>
                 </div>

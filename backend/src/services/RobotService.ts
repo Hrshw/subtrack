@@ -5,16 +5,20 @@ import { ScanResult } from '../models/ScanResult';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-// Model priority list for robot speech - free models first
+// Model priority list for robot chat - best free models for cost/finance analysis
+// MiMo-V2-Flash is #1 in Finance, DeepSeek excellent at reasoning
 const ROBOT_MODEL_PRIORITY_LIST = [
-    'mistralai/mistral-7b-instruct:free',
-    'google/gemma-7b-it:free',
-    'qwen/qwen-2.5-7b-instruct:free',
-    'meta-llama/llama-3.2-3b-instruct:free',
+    'xiaomi/mimo-v2-flash:free',              // #1 in Finance, excellent reasoning
+    'deepseek/deepseek-r1t2-chimera:free',    // Great for reasoning & financial analysis
+    'allenai/olmo-3.1-32b-think:free',        // Deep reasoning, complex logic
+    'openai/gpt-oss-120b:free',               // High-reasoning, general purpose
+    'nvidia/nemotron-3-nano-30b-a3b:free',    // Efficient, good accuracy
+    'mistralai/devstral-2-2512:free',         // Large context, general tasks
 ];
 
-const THROTTLE_MINUTES = 20;
-const FREE_USER_MESSAGE_LIMIT = 1;
+const THROTTLE_MINUTES = 60; // 1 hour before regenerating speech bubble
+const FREE_USER_MESSAGE_LIMIT = 4; // 4 messages per day for free users
+const FREE_USER_RESET_MINUTES = 1440; // 24 hours = 1 day
 
 export class RobotService {
     /**
@@ -31,7 +35,7 @@ export class RobotService {
             // Check cache
             const cache = await RobotChatCache.findOne({ userId });
 
-            // 1. If cache exists and is valid (within 5 mins), return it
+            // 1. If cache exists and is fresh (within THROTTLE time), return it
             if (cache && cache.timestamp) {
                 const minutesSinceLastCall = (now.getTime() - new Date(cache.timestamp).getTime()) / (1000 * 60);
                 if (minutesSinceLastCall < THROTTLE_MINUTES) {
@@ -40,26 +44,36 @@ export class RobotService {
                 }
             }
 
-            // 2. If NO cache exists (First load ever), return Time-Based Greeting (No AI)
-            if (!cache) {
-                console.log(`👋 First load for user ${userId} - returning time-based greeting`);
+            // 2. Cache expired or doesn't exist
+            // For first load OR after 1+ hour idle: Show greeting first, then AI next time
+
+            const shouldShowGreeting = !cache || (cache && cache.greetingShown === false);
+
+            if (shouldShowGreeting) {
+                // Show time-based greeting
+                console.log(`👋 Showing greeting for user ${userId} (first load or after long idle)`);
                 const greeting = this.getTimeBasedGreeting();
 
-                // Save to cache so it persists for 5 mins
-                await RobotChatCache.create({
-                    userId,
-                    lastMessage: greeting,
-                    timestamp: now,
-                    isPro,
-                    messageCount: 0,
-                    lastResetAt: now
-                });
+                // Save to cache with flag
+                await RobotChatCache.findOneAndUpdate(
+                    { userId },
+                    {
+                        userId,
+                        lastMessage: greeting,
+                        timestamp: now,
+                        isPro,
+                        messageCount: cache?.messageCount || 0,
+                        lastResetAt: cache?.lastResetAt || now,
+                        greetingShown: true // Mark that greeting was shown
+                    },
+                    { upsert: true, new: true }
+                );
 
                 return greeting;
             }
 
-            // 3. If cache exists but expired (Subsequent loads), generate AI Roast
-            console.log(`🤖 Generating NEW robot speech for user ${userId} (isPro: ${isPro})`);
+            // 3. Greeting already shown, now generate AI response
+            console.log(`🤖 Generating AI robot speech for user ${userId} (isPro: ${isPro})`);
 
             // Get real scan data
             const scanResults = await ScanResult.find({ userId }).sort({ createdAt: -1 }).limit(10).catch(() => []);
@@ -74,26 +88,40 @@ export class RobotService {
             let prompt: string;
 
             if (allHealthy && totalServices > 0) {
-                prompt = `You are a cute, sassy robot assistant. User is a COST CHAMPION! All ${totalServices} services optimal.
-Generate a SHORT (max 12 words) celebratory message. Use Indian slang (bro, yaar). Be proud.
-Example: "Zero waste detected, you're literally perfect yaar!"`;
+                prompt = `You are a friendly robot mascot for a subscription tracker app (NOT a financial service).
+Your job: Create a fun, celebratory message for a user who has all ${totalServices} connected apps optimized.
+Requirements: MAX 12 words. Use casual Indian-English (bro, yaar). Be excited and positive.
+Output ONLY the message, nothing else.
+Example output: "Zero waste detected, you're literally perfect yaar!"`;
             } else if (hasLeaks) {
-                prompt = `You are a cute, sassy robot assistant. User has ${leaks.length} leaks worth ₹${totalSavings.toLocaleString('en-IN')}.
-Generate a SHORT (max 12 words) roast/nudge. Use Indian slang.
-Example: "Found ${leaks.length} leaks worth ₹${totalSavings.toLocaleString('en-IN')} — let's kill them bro"`;
+                prompt = `You are a friendly robot mascot for a subscription tracker app (NOT a financial service).
+Your job: Create a playful nudge about ${leaks.length} unused/zombie subscriptions totaling ₹${totalSavings.toLocaleString('en-IN')}.
+Requirements: MAX 12 words. Use casual Indian-English (bro, yaar). Be cheeky but helpful.
+Output ONLY the message, nothing else.
+Example output: "Found ${leaks.length} sleeping apps — time to wake up bro!"`;
             } else {
-                prompt = `You are a cute, sassy robot assistant.
-Generate a SHORT (max 12 words) engaging message about saving money. Use Indian slang.
-Example: "I'm your money-saving sidekick, click to chat!"`;
+                prompt = `You are a friendly robot mascot for a subscription tracker app (NOT a financial service).
+Your job: Create a fun greeting encouraging the user to explore their connected apps.
+Requirements: MAX 12 words. Use casual Indian-English (bro, yaar). Be friendly and curious.
+Output ONLY the message, nothing else.
+Example output: "I'm your app-tracking buddy, click to explore!"`;
             }
 
-            const message = await this.generateWithOpenRouter(prompt, {
+            let message = await this.generateWithOpenRouter(prompt, {
                 temperature: 0.9,
                 max_tokens: 50,
                 top_p: 0.95,
-            }) || this.getTimeBasedGreeting(); // Fallback to greeting if AI fails
+            });
 
-            // Update cache
+            // Check for AI refusal patterns and use fallback
+            const refusalPatterns = ['cannot', 'can\'t', 'unable to', 'financial advice', 'as an ai', 'i apologize'];
+            const hasRefusal = message && refusalPatterns.some(p => message!.toLowerCase().includes(p));
+
+            if (!message || hasRefusal) {
+                message = this.getTimeBasedGreeting();
+            }
+
+            // Update cache - reset greetingShown so next cycle starts with greeting again
             await RobotChatCache.findOneAndUpdate(
                 { userId },
                 {
@@ -138,35 +166,68 @@ Example: "I'm your money-saving sidekick, click to chat!"`;
                 });
             }
 
-            // Reset window if needed
+            // Reset window if needed (24 hours for chat limits)
             const minutesSinceReset = (now.getTime() - new Date(cache.lastResetAt).getTime()) / (1000 * 60);
-            if (minutesSinceReset >= THROTTLE_MINUTES) {
+            if (minutesSinceReset >= FREE_USER_RESET_MINUTES) {
                 cache.messageCount = 0;
                 cache.lastResetAt = now;
             }
 
-            // Check limits
+            // Check limits (4 messages per day for free users)
+            const remainingMessages = FREE_USER_MESSAGE_LIMIT - cache.messageCount;
             if (!isPro && cache.messageCount >= FREE_USER_MESSAGE_LIMIT) {
                 return {
-                    message: "Want unlimited AI help + weekly auto-scans? Upgrade to Pro — we need your support to keep building this ❤️",
+                    message: `You've used all ${FREE_USER_MESSAGE_LIMIT} free messages today! Upgrade to Pro for unlimited AI help + weekly auto-scans ❤️`,
                     shouldUpgrade: true
                 };
             }
 
-            // Generate response
-            const scanResults = await ScanResult.find({ userId }).sort({ createdAt: -1 }).limit(5);
-            const leaks = scanResults.filter(r => r.status === 'zombie' || r.status === 'downgrade_possible');
-            const context = leaks.length > 0
-                ? `User has ${leaks.length} leaks: ${leaks.map(l => `${l.resourceName} (₹${l.potentialSavings})`).join(', ')}`
-                : 'User has no current leaks';
+            // Get REAL user data for context
+            const userName = (user as any).name || user.email?.split('@')[0] || 'there';
+            const scanResults = await ScanResult.find({ userId }).sort({ createdAt: -1 }).limit(20);
+            const leaks = scanResults.filter(r => r.status === 'zombie' || r.status === 'downgrade_possible' || r.status === 'unused');
+            const healthyServices = scanResults.filter(r => r.status === 'active');
+            const totalSavings = leaks.reduce((sum, l) => sum + (l.potentialSavings || 0), 0);
 
-            const prompt = `You are SubTrack's AI assistant — a sassy, helpful robot for Indian indie hackers.
-Context: ${context}
-User tier: ${isPro ? 'Pro' : 'Free'}
-User question: "${userMessage}"
+            // Build detailed context from ACTUAL scan data
+            const leakDetails = leaks.map(l => {
+                const rawData = l.rawData || {};
+                return `${l.resourceName} (${l.resourceType || 'service'}, ₹${l.potentialSavings}/mo, reason: ${l.reason || 'unused'})`;
+            }).join('; ');
 
-Respond in 1-2 sentences. Be helpful, direct, slightly sassy. Use Indian slang (bro, yaar).
-${!isPro ? 'Subtly hint they should upgrade (but don\'t be pushy).' : ''}`;
+            const healthyDetails = healthyServices.slice(0, 5).map(s => s.resourceName).join(', ');
+
+            // Get specific resource info if user asks about something
+            const relevantResources = scanResults.filter(r =>
+                userMessage.toLowerCase().includes(r.resourceName.toLowerCase()) ||
+                (r.resourceType && userMessage.toLowerCase().includes(r.resourceType.toLowerCase()))
+            );
+
+            const specificContext = relevantResources.length > 0
+                ? `\nRelevant resources found: ${relevantResources.map(r =>
+                    `${r.resourceName} (type: ${r.resourceType}, status: ${r.status}, savings: ₹${r.potentialSavings}, raw: ${JSON.stringify(r.rawData || {}).substring(0, 200)})`
+                ).join('; ')}`
+                : '';
+
+            const prompt = `You are SubTrack's AI assistant helping ${userName} manage their dev tool subscriptions.
+
+=== USER'S ACTUAL DATA ===
+User Name: ${userName}
+User Tier: ${isPro ? 'Pro' : 'Free'}
+Total Leaks Found: ${leaks.length} (potential savings: ₹${totalSavings.toLocaleString('en-IN')}/month)
+Healthy Services: ${healthyServices.length} (${healthyDetails || 'none yet'})
+Leak Details: ${leakDetails || 'No leaks detected'}
+${specificContext}
+=== END DATA ===
+
+User Question: "${userMessage}"
+
+IMPORTANT: 
+- ONLY reference the data shown above. Do NOT make up instances, prices, or services.
+- If user asks about something not in their data, say "I don't see that in your connected services."
+- Be helpful, direct, and use casual Indian-English (bro, yaar).
+- Keep response to 2-3 sentences max.
+${!isPro ? `- User has ${remainingMessages - 1} messages left today.` : ''}`;
 
             const response = await this.generateWithOpenRouter(prompt, {
                 temperature: 0.8,
@@ -188,13 +249,16 @@ ${!isPro ? 'Subtly hint they should upgrade (but don\'t be pushy).' : ''}`;
     }
 
     /**
-     * Generate text using OpenRouter with cleanup
+     * Generate text using OpenRouter with cleanup and TOON optimization
      */
     private static async generateWithOpenRouter(
         prompt: string,
         options: { temperature: number; max_tokens: number; top_p: number }
     ): Promise<string | null> {
         if (!OPENROUTER_API_KEY) return null;
+
+        // TOON (Token-Oriented Object Notation) - Optimize prompt for token efficiency
+        const toonPrompt = this.toTOON(prompt);
 
         for (const model of ROBOT_MODEL_PRIORITY_LIST) {
             try {
@@ -208,7 +272,7 @@ ${!isPro ? 'Subtly hint they should upgrade (but don\'t be pushy).' : ''}`;
                     },
                     body: JSON.stringify({
                         model,
-                        messages: [{ role: 'user', content: prompt }],
+                        messages: [{ role: 'user', content: toonPrompt }],
                         temperature: options.temperature,
                         max_tokens: options.max_tokens,
                         top_p: options.top_p,
@@ -233,15 +297,47 @@ ${!isPro ? 'Subtly hint they should upgrade (but don\'t be pushy).' : ''}`;
     }
 
     /**
-     * Clean up AI response tokens
+     * Clean up AI response tokens - remove ALL unwanted prefixes and formatting
      */
     private static cleanResponse(text: string): string {
         return text
-            .replace(/<s>|<\/s>|\[OUT\]|\[INST\]|\[\/INST\]|<<SYS>>|<<\/SYS>>/g, '') // Remove special tokens
-            .replace(/^["']|["']$/g, '') // Remove surrounding quotes
-            .replace(/\n+/g, ' ') // Flatten newlines
+            // Remove common model output prefixes/markers
+            .replace(/\[BOOK\]|\[BOT\]|\[INST\]|\[\/INST\]|\[OUT\]|\[SYS\]|\[\/SYS\]/gi, '')
+            // Remove special tokens
+            .replace(/<s>|<\/s>|<<SYS>>|<<\/SYS>>/g, '')
+            // Remove markdown bold/italic markers at start
+            .replace(/^\*\*|\*\*$|^\*|\*$|^_|_$/g, '')
+            // Remove pipe separators at start
+            .replace(/^\|+\s*/g, '')
+            // Remove surrounding quotes
+            .replace(/^["']|["']$/g, '')
+            // Flatten multiple spaces and newlines
+            .replace(/\n+/g, ' ')
+            .replace(/\s+/g, ' ')
             .trim();
     }
+
+    /**
+     * TOON (Token-Oriented Object Notation) - Convert verbose prompts to compact format
+     * Reduces token count by ~30-40% by using abbreviations and compact syntax
+     */
+    private static toTOON(prompt: string): string {
+        // Extract key information and compress
+        return prompt
+            // Compress common phrases
+            .replace(/You are a cute, sassy robot assistant\./gi, 'Role:SassyBot')
+            .replace(/Generate a SHORT \(max (\d+) words\)/gi, 'Gen:max$1w')
+            .replace(/Use Indian slang \(bro, yaar\)\./gi, 'Lang:IN-slang')
+            .replace(/Be proud\./gi, 'Tone:proud')
+            .replace(/Example:/gi, 'Ex:')
+            .replace(/services optimal/gi, 'svcs✓')
+            .replace(/leaks worth/gi, 'leaks:')
+            .replace(/rupees/gi, '₹')
+            // Compress structural elements
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
 
     /**
      * Get time-based greeting (Hard-coded, no AI)

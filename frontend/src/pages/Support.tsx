@@ -190,8 +190,8 @@ const Support = () => {
                             <div className="mt-6 text-center">
                                 <p className="text-sm text-slate-400">
                                     Or email us directly at{' '}
-                                    <a href="mailto:support@subtrack.app" className="text-emerald-400 hover:underline">
-                                        support@subtrack.app
+                                    <a href="mailto:support@untuuga.resend.app" className="text-emerald-400 hover:underline">
+                                        support@untuuga.resend.app
                                     </a>
                                 </p>
                             </div>

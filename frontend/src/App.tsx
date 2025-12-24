@@ -1,6 +1,7 @@
-import { SignedIn, SignedOut, SignIn, SignUp } from "@clerk/clerk-react";
+import { SignedIn, SignedOut, SignIn, SignUp, RedirectToSignIn } from "@clerk/clerk-react";
 import { BrowserRouter, Route, Routes, useNavigate } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
+import ServiceDetailPage from "./pages/ServiceDetailPage";
 import LandingPage from "./pages/LandingPage";
 import Settings from "./pages/Settings";
 import Pricing from "./pages/Pricing";
@@ -18,6 +19,7 @@ import DocsPricing from "./pages/docs/DocsPricing";
 import Demo from "./pages/Demo";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentFailure from "./pages/PaymentFailure";
+import Checkout from "./pages/Checkout";
 import { ClerkProvider } from "@clerk/clerk-react";
 import { dark } from "@clerk/themes";
 
@@ -88,6 +90,19 @@ function ClerkProviderWithRoutes() {
           }
         />
         <Route
+          path="/dashboard/service/:serviceId"
+          element={
+            <>
+              <SignedIn>
+                <ServiceDetailPage />
+              </SignedIn>
+              <SignedOut>
+                <LandingPage />
+              </SignedOut>
+            </>
+          }
+        />
+        <Route
           path="/dashboard"
           element={
             <>
@@ -127,6 +142,19 @@ function ClerkProviderWithRoutes() {
           <Route path="pricing" element={<DocsPricing />} />
         </Route>
         <Route path="/demo" element={<Demo />} />
+        <Route
+          path="/checkout"
+          element={
+            <>
+              <SignedIn>
+                <Checkout />
+              </SignedIn>
+              <SignedOut>
+                <RedirectToSignIn signInForceRedirectUrl="/checkout" />
+              </SignedOut>
+            </>
+          }
+        />
         <Route path="/payment/success" element={<PaymentSuccess />} />
         <Route path="/payment/failure" element={<PaymentFailure />} />
       </Routes>

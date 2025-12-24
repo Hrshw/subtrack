@@ -6,14 +6,19 @@
     "start": "node dist/index.js",
     "build": "tsc",
     "dev": "nodemon",
-    "digest": "ts-node src/scripts/sendDigest.ts",
-    "postinstall": "npm run build"
+    "digest": "ts-node src/scripts/sendDigest.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.936.0",
+    "@aws-sdk/client-dynamodb": "^3.936.0",
+    "@aws-sdk/client-ec2": "^3.938.0",
+    "@aws-sdk/client-lambda": "^3.938.0",
+    "@aws-sdk/client-rds": "^3.938.0",
+    "@aws-sdk/client-s3": "^3.937.0",
     "@clerk/clerk-sdk-node": "^4.13.23",
     "@google/generative-ai": "^0.24.1",
     "@react-email/components": "^0.5.7",

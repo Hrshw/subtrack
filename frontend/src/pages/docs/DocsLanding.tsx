@@ -62,7 +62,7 @@ const DocsLanding = () => {
                     <p className="text-slate-400 mb-6">
                         Can't find what you're looking for? Our support team is here to help you save money.
                     </p>
-                    <a href="mailto:support@subtrack.app" className="inline-flex items-center px-4 py-2 rounded-lg bg-white text-slate-900 font-bold hover:bg-slate-200 transition-colors">
+                    <a href="mailto:support@untuuga.resend.app" className="inline-flex items-center px-4 py-2 rounded-lg bg-white text-slate-900 font-bold hover:bg-slate-200 transition-colors">
                         Contact Support
                     </a>
                 </div>

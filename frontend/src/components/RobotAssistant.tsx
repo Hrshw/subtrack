@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useAnimation } from 'framer-motion';
-import { X, Send, Sparkles, Zap, Play } from 'lucide-react';
+import { X, Send, Sparkles, Play } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import axios from 'axios';
 import { getApiUrl } from '../lib/api';
 import { useAuth } from '@clerk/clerk-react';
-import { useNavigate } from 'react-router-dom';
+
 
 // --- Custom SVG Robot Component ---
 const CuteRobot = ({ isWalking, isWaving, isSitting }: { isWalking: boolean; isWaving: boolean; isSitting: boolean }) => {
@@ -122,8 +122,7 @@ const RobotAssistant = () => {
     const [isSitting, setIsSitting] = useState(false);
     const [hasPermission, setHasPermission] = useState(false);
 
-    const { getToken } = useAuth();
-    const navigate = useNavigate();
+    const { getToken, isLoaded, isSignedIn } = useAuth();
     const controls = useAnimation();
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -218,8 +217,15 @@ const RobotAssistant = () => {
     // --- Fetch Initial Speech on Mount ---
     useEffect(() => {
         const fetchSpeech = async () => {
+            if (!isLoaded || !isSignedIn) return;
+
+            // Add delay to ensure token is ready (1 second for reliability)
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
             try {
                 const token = await getToken();
+                if (!token) return;
+
                 const apiUrl = getApiUrl();
                 const response = await axios.get(`${apiUrl}/robot/speech`, {
                     headers: { Authorization: `Bearer ${token}` }
@@ -233,7 +239,7 @@ const RobotAssistant = () => {
             }
         };
         fetchSpeech();
-    }, [getToken]);
+    }, [getToken, isLoaded, isSignedIn]);
 
     // --- Scroll to bottom of chat ---
     useEffect(() => {
@@ -270,13 +276,22 @@ const RobotAssistant = () => {
         }
     };
 
-    const handleRobotClick = () => {
+    const handleRobotClick = async () => {
         if (!hasPermission) {
             setHasPermission(true);
             setSpeech("On it! 🚀");
         } else {
+            // Stop walking and return to corner when opening chat
+            setIsWalking(false);
+            setIsSitting(false);
+            await controls.start({ x: 0, transition: { duration: 0.5, ease: "easeOut" } });
             setIsOpen(true);
         }
+    };
+
+    const handleChatClose = () => {
+        setIsOpen(false);
+        // Robot will resume its normal cycle via the animation useEffect
     };
 
     return (
@@ -303,7 +318,7 @@ const RobotAssistant = () => {
                         <p className="text-sm font-medium leading-snug">{speech}</p>
                         {!hasPermission && (
                             <div className="mt-2 pt-2 border-t border-slate-100 flex items-center gap-1 text-xs font-bold text-emerald-600">
-                                <Play className="w-3 h-3 fill-current" /> Click to roam
+                                <Play className="w-3 h-3 fill-current" /> Let me explore! 🥺👉👈
                             </div>
                         )}
                         {/* Speech bubble tail */}
@@ -331,7 +346,7 @@ const RobotAssistant = () => {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            onClick={() => setIsOpen(false)}
+                            onClick={handleChatClose}
                             className="fixed inset-0 bg-black/50 z-40 pointer-events-auto"
                         />
 
@@ -355,7 +370,7 @@ const RobotAssistant = () => {
                                             <p className="text-xs text-slate-400">Your money-saving sidekick</p>
                                         </div>
                                     </div>
-                                    <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)}>
+                                    <Button variant="ghost" size="icon" onClick={handleChatClose}>
                                         <X className="w-5 h-5 text-slate-400" />
                                     </Button>
                                 </div>
@@ -390,24 +405,7 @@ const RobotAssistant = () => {
                                         </div>
                                     )}
 
-                                    {showUpgrade && (
-                                        <motion.div
-                                            initial={{ opacity: 0, y: 10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            className="bg-gradient-to-r from-emerald-900/50 to-slate-900 border border-emerald-500/30 p-4 rounded-xl text-center"
-                                        >
-                                            <p className="text-emerald-200 text-sm mb-3">
-                                                Want unlimited AI help + weekly auto-scans?
-                                            </p>
-                                            <Button
-                                                onClick={() => navigate('/pricing')}
-                                                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold"
-                                            >
-                                                <Zap className="w-4 h-4 mr-2 fill-current" />
-                                                Upgrade to Pro
-                                            </Button>
-                                        </motion.div>
-                                    )}
+                                    {/* Upgrade Nudge Removed */}
 
                                     <div ref={messagesEndRef} />
                                 </div>

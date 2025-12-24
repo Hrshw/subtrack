@@ -88,7 +88,7 @@ const Privacy = () => {
                                 <li><strong>Export:</strong> Download your scan history and reports</li>
                                 <li><strong>Object:</strong> Opt-out of email reports</li>
                             </ul>
-                            <p>To exercise these rights, email <a href="mailto:privacy@subtrack.app" className="text-emerald-400 hover:underline">privacy@subtrack.app</a></p>
+                            <p>To exercise these rights, email <a href="mailto:support@untuuga.resend.app" className="text-emerald-400 hover:underline">support@untuuga.resend.app</a></p>
                         </div>
                     </section>
 
@@ -138,7 +138,7 @@ const Privacy = () => {
                         <div className="text-slate-300 space-y-4">
                             <p>For privacy concerns:</p>
                             <ul className="list-disc ml-6 space-y-2">
-                                <li>Email: <a href="mailto:privacy@subtrack.app" className="text-emerald-400 hover:underline">privacy@subtrack.app</a></li>
+                                <li>Email: <a href="mailto:support@untuuga.resend.app" className="text-emerald-400 hover:underline">support@untuuga.resend.app</a></li>
                                 <li>Support: <a href="/support" className="text-emerald-400 hover:underline">Help Center</a></li>
                             </ul>
                         </div>

@@ -210,7 +210,7 @@ const LandingPage = () => {
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                         </span>
-                        Trusted by 1,200+ indie hackers
+                        Smart SaaS Subscription Tracker for Developers
                     </motion.div>
 
                     <motion.h1
@@ -233,9 +233,9 @@ const LandingPage = () => {
                         transition={{ duration: 0.8, delay: 0.2 }}
                         className="text-xl md:text-2xl text-slate-400 max-w-2xl mx-auto mb-12 leading-relaxed"
                     >
-                        Your dev tools are quietly draining your bank account.
+                        Automatically detect unused subscriptions, idle cloud resources, and forgotten developer tools.
                         <br />
-                        Connect <span className="text-white font-semibold">GitHub</span>, <span className="text-white font-semibold">Vercel</span> & <span className="text-white font-semibold">AWS</span> to find zombie subscriptions instantly.
+                        Connect <span className="text-white font-semibold">GitHub</span>, <span className="text-white font-semibold">Vercel</span> & <span className="text-white font-semibold">AWS</span> for instant cost insights.
                     </motion.p>
 
                     <motion.div
@@ -335,24 +335,24 @@ const LandingPage = () => {
                         {[
                             {
                                 icon: Zap,
-                                title: "Instant Detection",
-                                desc: "Connect your accounts and find leaks in under 2 minutes. No manual entry required.",
+                                title: "Automated Subscription Audit",
+                                desc: "Instantly scan your connected accounts to uncover dormant subscriptions, underutilized services, and billing redundancies.",
                                 color: "text-yellow-400",
                                 bg: "bg-yellow-400/10",
                                 border: "border-yellow-400/20"
                             },
                             {
                                 icon: Shield,
-                                title: "Bank-Grade Security",
-                                desc: "Read-only access. AES-256 encryption. We can't touch your code or modify your infrastructure.",
+                                title: "Enterprise-Grade Security",
+                                desc: "Read-only OAuth access with AES-256 encryption. Your code and infrastructure remain untouched—we only analyze usage patterns.",
                                 color: "text-emerald-400",
                                 bg: "bg-emerald-400/10",
                                 border: "border-emerald-400/20"
                             },
                             {
                                 icon: TrendingUp,
-                                title: "AI Recommendations",
-                                desc: "Gemini AI analyzes your usage patterns to suggest smart downgrades and consolidation opportunities.",
+                                title: "AI-Powered Cost Insights",
+                                desc: "Advanced AI analyzes your usage patterns to recommend smart downgrades, plan consolidations, and cost-saving opportunities.",
                                 color: "text-blue-400",
                                 bg: "bg-blue-400/10",
                                 border: "border-blue-400/20"
@@ -386,7 +386,7 @@ const LandingPage = () => {
                             transition={{ duration: 0.6 }}
                             className="text-5xl md:text-7xl font-bold mb-10 tracking-tight"
                         >
-                            Ready to stop the bleeding?
+                            Start Saving on SaaS Today
                         </motion.h2>
                         <motion.p
                             initial={{ opacity: 0, y: 20 }}
@@ -394,7 +394,7 @@ const LandingPage = () => {
                             transition={{ duration: 0.6, delay: 0.1 }}
                             className="text-xl md:text-2xl text-slate-400 mb-12 max-w-2xl mx-auto"
                         >
-                            Join 1,200+ founders who are saving millions on wasted dev tools. It takes less than 2 minutes.
+                            Join thousands of developers and startups optimizing their software costs. Free setup in under 2 minutes.
                         </motion.p>
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}

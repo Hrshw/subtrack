@@ -16,7 +16,7 @@ const DocsFAQ = () => {
         },
         {
             q: "Do you support custom integrations?",
-            a: "We are adding new integrations every week. If you have a specific request, please email support@subtrack.app."
+            a: "We are adding new integrations every week. If you have a specific request, please email support@untuuga.resend.app."
         },
         {
             q: "What happens if I cancel my subscription?",

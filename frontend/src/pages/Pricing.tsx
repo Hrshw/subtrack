@@ -1,71 +1,19 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Zap, Crown, Star } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import Confetti from 'react-confetti';
-import { toast } from 'sonner';
-import { getApiUrl } from '../lib/api';
-import axios from 'axios';
-import { useAuth } from '@clerk/clerk-react';
 
 const Pricing = () => {
     const [isAnnual, setIsAnnual] = useState(true);
-    const [showConfetti, setShowConfetti] = useState(false);
     const [leaksInput, setLeaksInput] = useState(47000);
-    const [isLoading, setIsLoading] = useState(false);
-    const paymentFormRef = useRef<HTMLFormElement>(null);
-    const { getToken } = useAuth();
 
-    const handleSubscribe = async () => {
-        try {
-            setIsLoading(true);
-            setShowConfetti(true);
-            toast.success("Redirecting to payment gateway...");
-
-            const token = await getToken();
-            const apiUrl = getApiUrl();
-
-            // Get PayU payment session
-            const response = await axios.post(
-                `${apiUrl}/payment/create-session`,
-                { plan: isAnnual ? 'annual' : 'monthly' },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-
-            const paymentData = response.data;
-
-            // Create and submit PayU form
-            const form = paymentFormRef.current;
-            if (!form) return;
-
-            // Populate form fields
-            Object.keys(paymentData).forEach(key => {
-                if (key !== 'payuUrl') {
-                    const input = form.elements.namedItem(key) as HTMLInputElement;
-                    if (input) {
-                        input.value = paymentData[key];
-                    }
-                }
-            });
-
-            // Set PayU URL
-            form.action = paymentData.payuUrl;
-
-            // Auto-submit form
-            setTimeout(() => {
-                form.submit();
-            }, 1000);
-
-        } catch (error) {
-            console.error('Payment initiation failed:', error);
-            toast.error("Failed to initiate payment. Please try again.");
-            setShowConfetti(false);
-        } finally {
-            setIsLoading(false);
-        }
+    const handleSubscribe = () => {
+        // Redirect to dedicated checkout page with plan param
+        const plan = isAnnual ? 'annual' : 'monthly';
+        window.location.href = `/checkout?plan=${plan}`;
     };
 
     const roiMinutes = Math.round((799 / leaksInput) * 30 * 24 * 60);
@@ -78,7 +26,6 @@ const Pricing = () => {
     return (
         <div className="min-h-screen bg-[#0a0e17] text-white font-sans selection:bg-emerald-500/30">
             <Navbar />
-            {showConfetti && <Confetti recycle={false} numberOfPieces={500} />}
 
             <main className="pt-32 pb-20 relative overflow-hidden">
                 {/* Background Effects */}
@@ -209,10 +156,9 @@ const Pricing = () => {
                             </div>
                             <Button
                                 onClick={handleSubscribe}
-                                disabled={isLoading}
-                                className="w-full py-6 text-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-lg shadow-emerald-500/25 disabled:opacity-50"
+                                className="w-full py-6 text-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-lg shadow-emerald-500/25"
                             >
-                                {isLoading ? 'Redirecting...' : 'Upgrade to Pro'}
+                                Upgrade to Pro
                             </Button>
                             <div className="mt-8 space-y-4">
                                 <Feature text="Unlimited connections" highlighted />
@@ -262,25 +208,6 @@ const Pricing = () => {
                 </div>
             </main>
             <Footer />
-
-            {/* Hidden PayU Payment Form */}
-            <form ref={paymentFormRef} method="post" style={{ display: 'none' }}>
-                <input type="hidden" name="key" />
-                <input type="hidden" name="txnid" />
-                <input type="hidden" name="amount" />
-                <input type="hidden" name="productinfo" />
-                <input type="hidden" name="firstname" />
-                <input type="hidden" name="email" />
-                <input type="hidden" name="phone" />
-                <input type="hidden" name="surl" />
-                <input type="hidden" name="furl" />
-                <input type="hidden" name="hash" />
-                <input type="hidden" name="udf1" />
-                <input type="hidden" name="udf2" />
-                <input type="hidden" name="udf3" />
-                <input type="hidden" name="udf4" />
-                <input type="hidden" name="udf5" />
-            </form>
         </div>
     );
 };

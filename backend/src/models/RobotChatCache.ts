@@ -6,7 +6,8 @@ const robotChatCacheSchema = new mongoose.Schema({
     timestamp: { type: Date, required: true },
     isPro: { type: Boolean, default: false },
     messageCount: { type: Number, default: 0 }, // Track messages in current session
-    lastResetAt: { type: Date, default: Date.now }
+    lastResetAt: { type: Date, default: Date.now },
+    greetingShown: { type: Boolean, default: false } // Track if greeting was shown
 }, { timestamps: true });
 
 // Index for fast lookups

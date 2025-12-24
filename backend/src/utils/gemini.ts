@@ -84,7 +84,7 @@ async function tryFallbackModels(
                         },
                     ],
                     temperature: 0.9,
-                    max_tokens: 120,
+                    max_tokens: 400,
                     top_p: 0.95,
                 })
             });
@@ -161,7 +161,7 @@ Roast them in 1-2 sentences. Use bro/yaar/beta, mention exact ₹ amount, be fun
                     },
                 ],
                 temperature: 0.9,
-                max_tokens: 120,
+                max_tokens: 400,
                 top_p: 0.95,
             })
         });

@@ -17,7 +17,7 @@ const Footer = () => {
                             </span>
                         </Link>
                         <p className="text-slate-400 text-sm leading-relaxed">
-                            Stop wasting money on dev tools you forgot about. Find and cancel zombie subscriptions in minutes.
+                            Automatically detect unused subscriptions and optimize your developer tool costs. Save money on forgotten SaaS.
                         </p>
                     </div>
 
@@ -46,8 +46,7 @@ const Footer = () => {
                         <ul className="space-y-2 text-sm">
                             <li><Link to="/support" className="text-slate-400 hover:text-emerald-400 transition-colors">Help Center</Link></li>
                             <li><Link to="/docs/faq" className="text-slate-400 hover:text-emerald-400 transition-colors">FAQ</Link></li>
-                            <li><a href="mailto:support@subtrack.app" className="text-slate-400 hover:text-emerald-400 transition-colors">Contact Us</a></li>
-                            <li><a href="https://twitter.com/subtrackapp" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-emerald-400 transition-colors">Twitter</a></li>
+                            <li><a href="mailto:support@untuuga.resend.app" className="text-slate-400 hover:text-emerald-400 transition-colors">Contact Us</a></li>
                         </ul>
                     </div>
                 </div>

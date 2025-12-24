@@ -72,7 +72,7 @@ const DocsSecurity = () => {
 
                 <h2 className="text-2xl font-bold text-white mb-4">Vulnerability Disclosure</h2>
                 <p className="text-slate-400">
-                    If you discover a security vulnerability, please report it to <a href="mailto:security@subtrack.app" className="text-emerald-400 hover:underline">security@subtrack.app</a>. We will respond within 24 hours.
+                    If you discover a security vulnerability, please report it to <a href="mailto:support@untuuga.resend.app" className="text-emerald-400 hover:underline">support@untuuga.resend.app</a>. We will respond within 24 hours.
                 </p>
             </div>
         </>

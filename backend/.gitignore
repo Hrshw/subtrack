@@ -3,9 +3,9 @@ node_modules/
 /.pnp
 .pnp.js
 
-# Production
-/dist
-/build
+# For EC2 deployment repo: We TRACK dist/ and public/
+# (pre-built code ready to run with just `npm start`)
+# DO NOT ignore /dist or /public in the deployment repo
 
 # Environment variables
 .env
@@ -45,4 +45,3 @@ Thumbs.db
 *.pem
 *.key
 
-.vercel

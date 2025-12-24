@@ -6,11 +6,14 @@ node_modules/
 # Testing
 /coverage
 
-# Production
+# Production (dist folders are built locally, not committed)
 /build
 /dist
 /frontend/dist
-/backend/dist
+
+# Important: backend/public IS tracked for EC2 deployment
+# (frontend build is copied there before pushing)
+!backend/public/
 
 # Misc
 .DS_Store
@@ -51,6 +54,4 @@ Thumbs.db
 # Railway
 .railway/
 
-# Vercel
-.vercel
 

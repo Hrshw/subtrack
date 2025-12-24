@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { PayUService } from '../services/PayUService';
 import { User } from '../models/User';
 
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+
 export const createPaymentSession = async (req: Request, res: Response) => {
     try {
         // @ts-ignore
@@ -26,39 +28,58 @@ export const createPaymentSession = async (req: Request, res: Response) => {
     }
 };
 
-export const handlePaymentResponse = async (req: Request, res: Response) => {
+export const handlePaymentSuccess = async (req: Request, res: Response) => {
     try {
         const responseData = req.body;
+        console.log('💳 PayU Success Callback received:', responseData.txnid);
 
-        // Verify payment
+        // Verify payment hash
         const isValid = await PayUService.verifyPayment(responseData);
 
         if (!isValid) {
-            return res.status(400).json({
-                success: false,
-                message: 'Payment verification failed'
-            });
+            console.error('❌ Payment verification failed for:', responseData.txnid);
+            return res.redirect(`${CLIENT_URL}/payment/failure?reason=verification_failed`);
         }
 
-        // Handle successful payment
-        if (responseData.status === 'success') {
-            await PayUService.handleSuccessfulPayment(responseData);
-            return res.json({
-                success: true,
-                message: 'Payment successful! Welcome to Pro 🎉'
-            });
+        // Check payment status
+        if (responseData.status !== 'success') {
+            console.error('❌ Payment status not success:', responseData.status);
+            return res.redirect(`${CLIENT_URL}/payment/failure?reason=payment_not_successful`);
         }
 
-        res.json({
-            success: false,
-            message: 'Payment was not successful'
+        // Handle successful payment - upgrade user to Pro
+        await PayUService.handleSuccessfulPayment(responseData);
+
+        // Redirect to frontend success page with transaction details
+        const successParams = new URLSearchParams({
+            txnid: responseData.txnid || '',
+            amount: responseData.amount || '',
+            status: 'success'
         });
+
+        res.redirect(`${CLIENT_URL}/payment/success?${successParams.toString()}`);
 
     } catch (error) {
-        console.error('Payment response handling error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error processing payment response'
+        console.error('Payment success handling error:', error);
+        res.redirect(`${CLIENT_URL}/payment/failure?reason=server_error`);
+    }
+};
+
+export const handlePaymentFailure = async (req: Request, res: Response) => {
+    try {
+        const responseData = req.body;
+        console.log('❌ PayU Failure Callback received:', responseData.txnid, responseData.error_Message);
+
+        // Build failure URL with details
+        const failParams = new URLSearchParams({
+            txnid: responseData.txnid || '',
+            reason: responseData.error_Message || responseData.unmappedstatus || 'payment_failed'
         });
+
+        res.redirect(`${CLIENT_URL}/payment/failure?${failParams.toString()}`);
+
+    } catch (error) {
+        console.error('Payment failure handling error:', error);
+        res.redirect(`${CLIENT_URL}/payment/failure?reason=server_error`);
     }
 };

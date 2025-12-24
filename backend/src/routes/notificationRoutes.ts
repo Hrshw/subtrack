@@ -2,8 +2,12 @@ import express from 'express';
 import { NotificationSettings } from '../models/NotificationSettings';
 import { EmailService } from '../services/EmailService';
 import { User } from '../models/User';
+import { requireAuth } from '../middleware/auth';
 
 const router = express.Router();
+
+// Apply authentication middleware to all routes
+router.use(requireAuth);
 
 // Get settings
 router.get('/settings', async (req, res) => {

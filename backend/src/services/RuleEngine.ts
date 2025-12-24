@@ -9,6 +9,7 @@ interface UsageData {
     // GitHub
     lastCommitDate?: Date;
     hasPrivateRepos?: boolean;
+    repos?: any[];
 
     // Vercel
     bandwidthUsage?: number;
@@ -24,25 +25,46 @@ interface UsageData {
 
     // Linear
     issuesTouched?: number;
+    userCount?: number;
+    teamCount?: number;
+    orgName?: string;
 
     // Resend
     emailsSent?: number;
+    domainCount?: number;
+    apiKeyCount?: number;
+    domains?: string[];
+
+    // Clerk
+    orgCount?: number;
+
+    // Stripe
+    accountId?: string;
+    businessName?: string;
+    chargesVolume?: number;
+    subscriptionCount?: number | string;
+    country?: string;
 
     // Generic
     activeUsers?: number;
 
-    // AWS Deep Scan
+    // AWS Deep Scan (supports both legacy and new AWSScanner format)
     ec2Instances?: any[];
+    elasticIPs?: any[];
+    ebsVolumes?: any[];
     rdsInstances?: any[];
-    lambdaFunctions?: number;
-    s3Buckets?: number;
+    dynamoDBTables?: any[];
+    lambdaFunctions?: any[] | number;  // Array from AWSScanner or number from legacy
+    s3Buckets?: any[] | number;         // Array from AWSScanner or number from legacy
+    region?: string;
+    scanError?: string;
 }
 
 // USD to INR conversion (rough estimate)
 const USD_TO_INR = 85;
 
 // Plan pricing (monthly, in USD)
-const PLAN_COSTS = {
+const PLAN_COSTS: Record<string, Record<string, number>> = {
     github: {
         free: 0,
         pro: 4,
@@ -62,6 +84,22 @@ const PLAN_COSTS = {
         free: 0,
         standard: 8, // per user
         plus: 14 // per user
+    },
+    clerk: {
+        free: 0,
+        hobby: 25,
+        pro: 99,
+        enterprise: 0 // Contact sales
+    },
+    resend: {
+        free: 0,
+        pro: 20,
+        enterprise: 0 // Contact sales
+    },
+    stripe: {
+        standard: 0, // Pay per transaction
+        starter: 0,
+        custom: 0
     }
 };
 
@@ -93,7 +131,7 @@ export class RuleEngine {
                             potentialSavings: planCost * USD_TO_INR,
                             currency: 'INR',
                             reason: `No commits in ${daysSinceCommit} days on paid plan`,
-                            rawData: { daysSinceCommit, lastCommitDate: data.lastCommitDate, plan: data.plan },
+                            rawData: { daysSinceCommit, lastCommitDate: data.lastCommitDate, plan: data.plan, repos: data.repos },
                             issue: 'zombie'
                         });
                     } else {
@@ -104,7 +142,7 @@ export class RuleEngine {
                             potentialSavings: 0,
                             currency: 'INR',
                             reason: `Active: Last commit ${daysSinceCommit} days ago`,
-                            rawData: { daysSinceCommit, lastCommitDate: data.lastCommitDate, plan: data.plan },
+                            rawData: { daysSinceCommit, lastCommitDate: data.lastCommitDate, plan: data.plan, repos: data.repos },
                             issue: 'none'
                         });
                     }
@@ -117,7 +155,7 @@ export class RuleEngine {
                         potentialSavings: 0,
                         currency: 'INR',
                         reason: 'Active usage on Free plan',
-                        rawData: { plan: data.plan || 'free' },
+                        rawData: { plan: data.plan || 'free', repos: data.repos },
                         issue: 'none'
                     });
                 }
@@ -195,26 +233,29 @@ export class RuleEngine {
                 }
                 break;
 
+
             case 'aws':
-                // AWS Deep Scan Logic
-                // Check for stopped EC2 instances (Zombie)
+                // ===== EC2 INSTANCES =====
                 if (data.ec2Instances && data.ec2Instances.length > 0) {
+                    // Stopped instances
                     const stoppedInstances = data.ec2Instances.filter((i: any) => i.state === 'stopped');
                     if (stoppedInstances.length > 0) {
                         results.push({
                             resourceName: `${stoppedInstances.length} Stopped EC2 Instances`,
                             resourceType: 'compute',
                             status: 'zombie',
-                            potentialSavings: stoppedInstances.length * 8 * USD_TO_INR, // EBS storage costs
+                            potentialSavings: stoppedInstances.length * 8 * USD_TO_INR,
                             currency: 'INR',
-                            reason: `${stoppedInstances.length} instances are stopped but incurring EBS storage costs`,
+                            reason: `${stoppedInstances.length} EC2 instances are stopped but still incurring EBS storage costs`,
                             rawData: { count: stoppedInstances.length, instances: stoppedInstances },
                             issue: 'zombie'
                         });
                     }
 
-                    // Check for expensive running instances
-                    const expensiveInstances = data.ec2Instances.filter((i: any) => i.state === 'running' && (i.type.includes('large') || i.type.includes('xlarge')));
+                    // Large/expensive running instances
+                    const expensiveInstances = data.ec2Instances.filter((i: any) =>
+                        i.state === 'running' && (i.type.includes('large') || i.type.includes('xlarge'))
+                    );
                     if (expensiveInstances.length > 0) {
                         results.push({
                             resourceName: `${expensiveInstances.length} Large EC2 Instances`,
@@ -227,37 +268,299 @@ export class RuleEngine {
                             issue: 'overprovisioned'
                         });
                     }
+
+                    // HEALTHY: Optimized Running Instances
+                    const healthyInstances = data.ec2Instances.filter((i: any) =>
+                        i.state === 'running' && !i.type.includes('large') && !i.type.includes('xlarge')
+                    );
+                    if (healthyInstances.length > 0) {
+                        results.push({
+                            resourceName: `${healthyInstances.length} Optimized EC2 Instances`,
+                            resourceType: 'compute',
+                            status: 'active',
+                            potentialSavings: 0,
+                            currency: 'INR',
+                            reason: `${healthyInstances.length} instances are running efficiently`,
+                            rawData: { count: healthyInstances.length, instances: healthyInstances },
+                            issue: 'none'
+                        });
+                    }
                 }
 
-                // Lambda
-                if (data.lambdaFunctions && data.lambdaFunctions > 0) {
+                // ===== ELASTIC IPs =====
+                if (data.elasticIPs && data.elasticIPs.length > 0) {
+                    const unattachedIPs = data.elasticIPs.filter((ip: any) => !ip.isAttached);
+                    if (unattachedIPs.length > 0) {
+                        results.push({
+                            resourceName: `${unattachedIPs.length} Unattached Elastic IPs`,
+                            resourceType: 'networking',
+                            status: 'zombie',
+                            potentialSavings: unattachedIPs.length * 3.6 * USD_TO_INR,
+                            currency: 'INR',
+                            reason: `${unattachedIPs.length} Elastic IPs are not attached to instances. You're charged for unattached IPs!`,
+                            rawData: { count: unattachedIPs.length, ips: unattachedIPs },
+                            issue: 'zombie'
+                        });
+                    }
+
+                    // HEALTHY: Attached IPs
+                    const attachedIPs = data.elasticIPs.filter((ip: any) => ip.isAttached);
+                    if (attachedIPs.length > 0) {
+                        results.push({
+                            resourceName: `${attachedIPs.length} Active Elastic IPs`,
+                            resourceType: 'networking',
+                            status: 'active',
+                            potentialSavings: 0,
+                            currency: 'INR',
+                            reason: `${attachedIPs.length} Elastic IPs are correctly attached and in use`,
+                            rawData: { count: attachedIPs.length, ips: attachedIPs },
+                            issue: 'none'
+                        });
+                    }
+                }
+
+                // ===== EBS VOLUMES =====
+                if (data.ebsVolumes && data.ebsVolumes.length > 0) {
+                    const unattachedVolumes = data.ebsVolumes.filter((vol: any) => !vol.isAttached);
+                    if (unattachedVolumes.length > 0) {
+                        const totalSize = unattachedVolumes.reduce((sum: number, vol: any) => sum + vol.size, 0);
+                        results.push({
+                            resourceName: `${unattachedVolumes.length} Unattached EBS Volumes`,
+                            resourceType: 'storage',
+                            status: 'zombie',
+                            potentialSavings: (totalSize * 0.10) * USD_TO_INR,
+                            currency: 'INR',
+                            reason: `${unattachedVolumes.length} EBS volumes (${totalSize}GB total) are not attached to any instance`,
+                            rawData: { count: unattachedVolumes.length, totalSizeGB: totalSize, volumes: unattachedVolumes },
+                            issue: 'zombie'
+                        });
+                    }
+
+                    // HEALTHY: Attached Volumes
+                    const attachedVolumes = data.ebsVolumes.filter((vol: any) => vol.isAttached);
+                    if (attachedVolumes.length > 0) {
+                        const totalSize = attachedVolumes.reduce((sum: number, vol: any) => sum + vol.size, 0);
+                        results.push({
+                            resourceName: `${attachedVolumes.length} Active EBS Volumes`,
+                            resourceType: 'storage',
+                            status: 'active',
+                            potentialSavings: 0,
+                            currency: 'INR',
+                            reason: `${attachedVolumes.length} volumes (${totalSize}GB) are attached and in use`,
+                            rawData: { count: attachedVolumes.length, totalSizeGB: totalSize, volumes: attachedVolumes },
+                            issue: 'none'
+                        });
+                    }
+                }
+
+                // ===== LAMBDA FUNCTIONS =====
+                const lambdaCount = Array.isArray(data.lambdaFunctions) ? data.lambdaFunctions.length : data.lambdaFunctions;
+                if (Array.isArray(data.lambdaFunctions) && data.lambdaFunctions.length > 0) {
+                    // Check for old/unused Lambda functions (not modified in 6+ months)
+                    const sixMonthsAgo = new Date();
+                    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+                    const oldFunctions = data.lambdaFunctions.filter((func: any) => {
+                        const lastModified = new Date(func.lastModified);
+                        return lastModified < sixMonthsAgo;
+                    });
+
+                    if (oldFunctions.length > 0) {
+                        results.push({
+                            resourceName: `${oldFunctions.length} Old Lambda Functions`,
+                            resourceType: 'compute',
+                            status: 'zombie',
+                            potentialSavings: oldFunctions.length * 2 * USD_TO_INR,
+                            currency: 'INR',
+                            reason: `${oldFunctions.length} Lambda functions haven't been modified in 6+ months`,
+                            rawData: { count: oldFunctions.length, functions: oldFunctions },
+                            issue: 'zombie'
+                        });
+                    }
+
+                    // HEALTHY: Active Functions
+                    const activeFunctions = data.lambdaFunctions.filter((func: any) => {
+                        const lastModified = new Date(func.lastModified);
+                        return lastModified >= sixMonthsAgo;
+                    });
+
+                    if (activeFunctions.length > 0) {
+                        results.push({
+                            resourceName: `${activeFunctions.length} Active Lambda Functions`,
+                            resourceType: 'compute',
+                            status: 'active',
+                            potentialSavings: 0,
+                            currency: 'INR',
+                            reason: `${activeFunctions.length} functions are actively maintained`,
+                            rawData: { count: activeFunctions.length, functions: activeFunctions },
+                            issue: 'none'
+                        });
+                    }
+                } else if (lambdaCount && lambdaCount > 0) {
+                    // Legacy number format
                     results.push({
-                        resourceName: `${data.lambdaFunctions} Lambda Functions`,
+                        resourceName: `${lambdaCount} Lambda Functions`,
                         resourceType: 'compute',
                         status: 'active',
                         potentialSavings: 0,
                         currency: 'INR',
-                        reason: `Active Serverless Architecture (${data.lambdaFunctions} functions)`,
-                        rawData: { count: data.lambdaFunctions },
+                        reason: `Active Serverless Architecture (${lambdaCount} functions)`,
+                        rawData: { count: lambdaCount },
                         issue: 'none'
                     });
                 }
 
-                // S3 Buckets
-                if (data.s3Buckets && data.s3Buckets > 0) {
+                // ===== DYNAMODB TABLES =====
+                if (data.dynamoDBTables && data.dynamoDBTables.length > 0) {
+                    const overprovisionedTables = data.dynamoDBTables.filter((table: any) =>
+                        table.billingMode === 'PROVISIONED' && table.itemCount < 1000
+                    );
+
+                    if (overprovisionedTables.length > 0) {
+                        results.push({
+                            resourceName: `${overprovisionedTables.length} Overprovisioned DynamoDB Tables`,
+                            resourceType: 'database',
+                            status: 'downgrade_possible',
+                            potentialSavings: overprovisionedTables.length * 10 * USD_TO_INR,
+                            currency: 'INR',
+                            reason: `${overprovisionedTables.length} DynamoDB tables use PROVISIONED billing with low item counts. Switch to ON_DEMAND!`,
+                            rawData: { count: overprovisionedTables.length, tables: overprovisionedTables },
+                            issue: 'overprovisioned'
+                        });
+                    }
+
+                    // HEALTHY: Optimized Tables
+                    const optimizedTables = data.dynamoDBTables.filter((table: any) =>
+                        !(table.billingMode === 'PROVISIONED' && table.itemCount < 1000)
+                    );
+
+                    if (optimizedTables.length > 0) {
+                        results.push({
+                            resourceName: `${optimizedTables.length} Optimized DynamoDB Tables`,
+                            resourceType: 'database',
+                            status: 'active',
+                            potentialSavings: 0,
+                            currency: 'INR',
+                            reason: `${optimizedTables.length} tables are using efficient billing modes`,
+                            rawData: { count: optimizedTables.length, tables: optimizedTables },
+                            issue: 'none'
+                        });
+                    }
+                }
+
+                // ===== S3 BUCKETS =====
+                const s3Count = Array.isArray(data.s3Buckets) ? data.s3Buckets.length : data.s3Buckets;
+                // ===== S3 BUCKETS =====
+
+                if (Array.isArray(data.s3Buckets) && data.s3Buckets.length > 0) {
+                    const thirtyDaysAgo = new Date();
+                    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+                    const unusedBuckets = data.s3Buckets.filter((bucket: any) => {
+                        if (!bucket.lastModified) return true; // Empty or no objects = Unused
+                        return new Date(bucket.lastModified) < thirtyDaysAgo;
+                    });
+
+                    if (unusedBuckets.length > 0) {
+                        results.push({
+                            resourceName: `${unusedBuckets.length} Unused S3 Buckets`,
+                            resourceType: 'storage',
+                            status: 'zombie',
+                            potentialSavings: unusedBuckets.length * 0.5 * USD_TO_INR, // Approx cost
+                            currency: 'INR',
+                            reason: `${unusedBuckets.length} buckets have no recent activity (>30 days)`,
+                            rawData: { count: unusedBuckets.length, buckets: unusedBuckets },
+                            issue: 'zombie',
+                            pricingStatus: 'coming_soon'
+                        });
+                    }
+
+                    const activeBuckets = data.s3Buckets.filter((bucket: any) => {
+                        return bucket.lastModified && new Date(bucket.lastModified) >= thirtyDaysAgo;
+                    });
+
+                    if (activeBuckets.length > 0) {
+                        results.push({
+                            resourceName: `${activeBuckets.length} Active S3 Buckets`,
+                            resourceType: 'storage',
+                            status: 'active',
+                            potentialSavings: 0,
+                            currency: 'INR',
+                            reason: `${activeBuckets.length} buckets are actively used`,
+                            rawData: { count: activeBuckets.length, buckets: activeBuckets },
+                            issue: 'none',
+                            pricingStatus: 'coming_soon'
+                        });
+                    }
+                } else if (s3Count && s3Count > 0) {
                     results.push({
-                        resourceName: `${data.s3Buckets} S3 Buckets`,
+                        resourceName: `${s3Count} S3 Buckets`,
                         resourceType: 'storage',
                         status: 'active',
                         potentialSavings: 0,
                         currency: 'INR',
-                        reason: `Storage active in ${data.s3Buckets} buckets`,
-                        rawData: { count: data.s3Buckets },
-                        issue: 'none'
+                        reason: `${s3Count} S3 buckets active`,
+                        rawData: { count: s3Count },
+                        issue: 'none',
+                        pricingStatus: 'coming_soon'
                     });
                 }
 
-                if (!data.ec2Instances && !data.lambdaFunctions && !data.s3Buckets) {
+                // ===== RDS INSTANCES =====
+                if (data.rdsInstances && data.rdsInstances.length > 0) {
+                    // Stopped RDS
+                    const stoppedRDS = data.rdsInstances.filter((db: any) => db.status === 'stopped');
+                    if (stoppedRDS.length > 0) {
+                        results.push({
+                            resourceName: `${stoppedRDS.length} Stopped RDS Instances`,
+                            resourceType: 'database',
+                            status: 'zombie',
+                            potentialSavings: stoppedRDS.length * 15 * USD_TO_INR,
+                            currency: 'INR',
+                            reason: `${stoppedRDS.length} RDS instances are stopped but still incurring storage costs`,
+                            rawData: { count: stoppedRDS.length, instances: stoppedRDS },
+                            issue: 'zombie'
+                        });
+                    }
+
+                    // Multi-AZ RDS
+                    const multiAZInstances = data.rdsInstances.filter((db: any) =>
+                        db.multiAZ && db.status === 'available'
+                    );
+                    if (multiAZInstances.length > 0) {
+                        results.push({
+                            resourceName: `${multiAZInstances.length} Multi-AZ RDS Instances`,
+                            resourceType: 'database',
+                            status: 'downgrade_possible',
+                            potentialSavings: multiAZInstances.length * 30 * USD_TO_INR,
+                            currency: 'INR',
+                            reason: `${multiAZInstances.length} RDS instances use Multi-AZ (2x cost). Disable if not needed for HA.`,
+                            rawData: { count: multiAZInstances.length, instances: multiAZInstances },
+                            issue: 'overprovisioned'
+                        });
+                    }
+
+                    // HEALTHY: Optimized RDS
+                    const optimizedRDS = data.rdsInstances.filter((db: any) =>
+                        db.status === 'available' && !db.multiAZ
+                    );
+                    if (optimizedRDS.length > 0) {
+                        results.push({
+                            resourceName: `${optimizedRDS.length} Optimized RDS Instances`,
+                            resourceType: 'database',
+                            status: 'active',
+                            potentialSavings: 0,
+                            currency: 'INR',
+                            reason: `${optimizedRDS.length} RDS instances are running efficiently (Single-AZ)`,
+                            rawData: { count: optimizedRDS.length, instances: optimizedRDS },
+                            issue: 'none'
+                        });
+                    }
+                }
+
+                // Fallback
+                if (!data.ec2Instances && !data.elasticIPs && !data.ebsVolumes &&
+                    !lambdaCount && !data.dynamoDBTables && !s3Count && !data.rdsInstances) {
                     results.push({
                         resourceName: 'AWS Account',
                         resourceType: 'account',
@@ -265,11 +568,12 @@ export class RuleEngine {
                         potentialSavings: 0,
                         currency: 'INR',
                         reason: 'No resources detected in scan',
-                        rawData: { activeRegions: data.activeRegions || [] },
+                        rawData: { activeRegions: data.activeRegions || [], region: data.region },
                         issue: 'none'
                     });
                 }
                 break;
+
 
             case 'linear':
                 // Only flag if on paid plan with minimal usage
