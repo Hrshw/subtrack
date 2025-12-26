@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import axios from 'axios';
+import { getApiUrl } from '../lib/api';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -59,11 +61,16 @@ const Support = () => {
         e.preventDefault();
         const toastId = toast.loading('Sending message...');
 
-        // Simulate API call
-        await new Promise(r => setTimeout(r, 1500));
+        try {
+            const apiUrl = getApiUrl();
+            await axios.post(`${apiUrl}/support/submit`, formData);
 
-        toast.success('Message sent! We\'ll reply within 24 hours.', { id: toastId });
-        setFormData({ name: '', email: '', message: '' });
+            toast.success('Message sent! We\'ll reply within 24 hours.', { id: toastId });
+            setFormData({ name: '', email: '', message: '' });
+        } catch (error) {
+            console.error('Support submission error:', error);
+            toast.error('Failed to send message. Please try emailing us directly.', { id: toastId });
+        }
     };
 
     return (

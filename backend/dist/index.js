@@ -16,6 +16,7 @@ const notificationRoutes_1 = __importDefault(require("./routes/notificationRoute
 const robotRoutes_1 = __importDefault(require("./routes/robotRoutes"));
 const paymentRoutes_1 = __importDefault(require("./routes/paymentRoutes"));
 const oauthRoutes_1 = __importDefault(require("./routes/oauthRoutes"));
+const supportRoutes_1 = __importDefault(require("./routes/supportRoutes"));
 const app = (0, express_1.default)();
 const PORT = Number(process.env.PORT) || 5000;
 // CORS Configuration
@@ -98,6 +99,7 @@ app.use('/api/notifications', notificationRoutes_1.default);
 app.use('/api/robot', robotRoutes_1.default);
 app.use('/api/payment', paymentRoutes_1.default);
 app.use('/api/oauth', oauthRoutes_1.default);
+app.use('/api/support', supportRoutes_1.default);
 // Serve static frontend files from 'public' directory
 const publicPath = path_1.default.join(__dirname, '..', 'public');
 app.use(express_1.default.static(publicPath));

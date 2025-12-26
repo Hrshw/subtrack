@@ -8,15 +8,16 @@ export const syncUser = async (req: Request, res: Response) => {
         const { type, data } = req.body;
 
         if (type === 'user.created' || type === 'user.updated') {
-            const { id, email_addresses } = data;
+            const { id, email_addresses, first_name, last_name } = data;
             const email = email_addresses[0]?.email_address;
+            const name = [first_name, last_name].filter(Boolean).join(' ');
 
             await User.findOneAndUpdate(
                 { clerkId: id },
-                { clerkId: id, email },
+                { clerkId: id, email, name },
                 { upsert: true, new: true }
             );
-            console.log(`User synced: ${email}`);
+            console.log(`User synced: ${email} (${name || 'No Name'})`);
         }
 
         res.status(200).json({ success: true });

@@ -45,13 +45,38 @@ const Demo = () => {
     return (
         <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-emerald-500/30">
             <Navbar />
-            
+
             {/* Demo Banner */}
             <div className="fixed top-20 left-0 right-0 z-40 bg-emerald-500/10 border-b border-emerald-500/20 py-2 text-center text-sm text-emerald-400 font-medium">
                 You are viewing the Live Demo. Data is simulated. <Link to="/sign-up" className="underline hover:text-white">Create an account</Link> to scan your real infrastructure.
             </div>
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-36 pb-8">
+                {/* Hero / Tour Section */}
+                <div className="flex flex-col items-center text-center mb-12">
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-6 rounded-3xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 backdrop-blur-xl mb-8"
+                    >
+                        <h1 className="text-4xl md:text-5xl font-black mb-4 bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
+                            Live Product Demo
+                        </h1>
+                        <p className="text-slate-400 text-lg max-w-2xl mb-8">
+                            Explore how SubTrack helps you discover leaks and save money automatically.
+                            Interactive tour available below!
+                        </p>
+                        <Button
+                            size="lg"
+                            className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black h-14 px-8 rounded-full shadow-lg shadow-emerald-500/20"
+                            onClick={() => (window as any).Supademo?.open('cmjmiy7hw53323zz213e9zkry')}
+                        >
+                            <Zap className="w-5 h-5 mr-3" />
+                            Take the Interactive Tour
+                        </Button>
+                    </motion.div>
+                </div>
+
                 {/* Stats Overview */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     <Card className="bg-slate-900 border-slate-800">

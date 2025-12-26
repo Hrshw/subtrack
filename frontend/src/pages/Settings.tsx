@@ -257,7 +257,7 @@ const Settings = () => {
                             </div>
                             <div className="text-center md:text-left space-y-2">
                                 <h2 className="text-3xl font-bold text-white">
-                                    {user?.firstName} {user?.lastName}
+                                    {profile?.name || `${user?.firstName} ${user?.lastName}`}
                                 </h2>
                                 <div className="flex items-center justify-center md:justify-start gap-4 text-slate-400">
                                     <div className="flex items-center gap-2">

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UserButton, useUser, useAuth } from "@clerk/clerk-react";
 import { Button } from '../components/ui/button';
 import ConnectModal from '../components/ConnectModal';
@@ -47,9 +47,10 @@ interface ExtendedLeak extends Leak {
 }
 
 const Dashboard = () => {
-    const { isLoaded, isSignedIn } = useUser();
+    const { isLoaded, isSignedIn, user } = useUser();
     const { getToken } = useAuth();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
 
     const [profile, setProfile] = useState<any>(null);
     const [connections, setConnections] = useState<ExtendedConnection[]>([]);
@@ -124,6 +125,35 @@ const Dashboard = () => {
 
         fetchDataWithDelay();
     }, [isLoaded, isSignedIn]);
+
+    // Handle URL parameters for errors and success messages
+    useEffect(() => {
+        const error = searchParams.get('error');
+        const success = searchParams.get('success');
+        const connected = searchParams.get('connected');
+
+        if (error) {
+            let message = 'An error occurred';
+            if (error === 'state_expired') message = 'Connection session expired. Please try again.';
+            if (error === 'access_denied') message = 'Access denied by provider.';
+
+            toast.error(message, {
+                description: 'We couldn\'t complete the integration.',
+                duration: 5000,
+            });
+            // Clean up URL
+            navigate('/dashboard', { replace: true });
+        }
+
+        if (success || connected) {
+            toast.success('Successfully connected!', {
+                description: `Your ${connected || 'service'} is now being monitored.`,
+                duration: 4000,
+            });
+            // Clean up URL
+            navigate('/dashboard', { replace: true });
+        }
+    }, [searchParams, navigate]);
 
     const handleScan = async (forceRefresh = false) => {
         setScanning(true);
@@ -366,6 +396,18 @@ const Dashboard = () => {
             </motion.nav>
 
             <main className="max-w-[1400px] mx-auto px-6 py-8 pb-32 relative z-10">
+                {/* Welcome Header */}
+                <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="mb-8"
+                >
+                    <h1 className="text-4xl font-bold text-white tracking-tight">
+                        Welcome back, <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">{profile?.name || user?.firstName || 'Developer'}</span>
+                    </h1>
+                    <p className="text-slate-400 mt-2 text-lg">Here's the latest status of your cloud infrastructure and subscriptions.</p>
+                </motion.div>
+
                 {/* Hero Section - Dynamic */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                     {/* Main Savings Card */}

@@ -11,6 +11,7 @@ import notificationRoutes from './routes/notificationRoutes';
 import robotRoutes from './routes/robotRoutes';
 import paymentRoutes from './routes/paymentRoutes';
 import oauthRoutes from './routes/oauthRoutes';
+import supportRoutes from './routes/supportRoutes';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
@@ -109,6 +110,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/robot', robotRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/oauth', oauthRoutes);
+app.use('/api/support', supportRoutes);
 
 // Serve static frontend files from 'public' directory
 const publicPath = path.join(__dirname, '..', 'public');

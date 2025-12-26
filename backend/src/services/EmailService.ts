@@ -70,4 +70,35 @@ export class EmailService {
             console.error('Failed to send leak alert:', error);
         }
     }
+
+    static async sendSupportTicket(userName: string, userEmail: string, message: string) {
+        if (!resend) {
+            console.warn('RESEND_API_KEY is not configured. Skipping email send.');
+            return;
+        }
+
+        try {
+            const supportEmail = 'support@untuuga.resend.app'; // Target support address
+            const fromAddress = process.env.RESEND_FROM_EMAIL || 'SubTrack Support <support@subtrack.app>';
+
+            await resend.emails.send({
+                from: fromAddress,
+                to: supportEmail,
+                subject: `Support Ticket: ${userName}`,
+                html: `
+                    <div style="font-family: sans-serif; line-height: 1.6; color: #333;">
+                        <h2>New Support Request</h2>
+                        <p><strong>From:</strong> ${userName} (${userEmail})</p>
+                        <p><strong>Message:</strong></p>
+                        <div style="background: #f4f4f4; padding: 15px; border-radius: 5px; border-left: 4px solid #10b981;">
+                            ${message.replace(/\n/g, '<br>')}
+                        </div>
+                    </div>
+                `,
+            });
+            console.log(`📧 Support ticket from ${userEmail} forwarded to team`);
+        } catch (error) {
+            console.error('Failed to send support ticket:', error);
+        }
+    }
 }

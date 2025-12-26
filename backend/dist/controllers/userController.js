@@ -18,10 +18,11 @@ const syncUser = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { type, data } = req.body;
         if (type === 'user.created' || type === 'user.updated') {
-            const { id, email_addresses } = data;
+            const { id, email_addresses, first_name, last_name } = data;
             const email = (_a = email_addresses[0]) === null || _a === void 0 ? void 0 : _a.email_address;
-            yield User_1.User.findOneAndUpdate({ clerkId: id }, { clerkId: id, email }, { upsert: true, new: true });
-            console.log(`User synced: ${email}`);
+            const name = [first_name, last_name].filter(Boolean).join(' ');
+            yield User_1.User.findOneAndUpdate({ clerkId: id }, { clerkId: id, email, name }, { upsert: true, new: true });
+            console.log(`User synced: ${email} (${name || 'No Name'})`);
         }
         res.status(200).json({ success: true });
     }

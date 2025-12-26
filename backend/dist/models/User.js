@@ -8,6 +8,7 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const userSchema = new mongoose_1.default.Schema({
     clerkId: { type: String, required: true, unique: true },
     email: { type: String, required: true },
+    name: { type: String },
     subscriptionStatus: {
         type: String,
         enum: ['free', 'pro'],

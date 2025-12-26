@@ -250,11 +250,15 @@ const LandingPage = () => {
                                 <ArrowRight className="ml-2 w-6 h-6" />
                             </Button>
                         </Link>
-                        <Link to="/demo">
-                            <Button size="lg" variant="outline" className="h-16 px-10 text-xl border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white rounded-full transition-all hover:scale-105 active:scale-95">
-                                View Live Demo
-                            </Button>
-                        </Link>
+                        <Button
+                            size="lg"
+                            variant="outline"
+                            className="h-16 px-10 text-xl border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white rounded-full transition-all hover:scale-105 active:scale-95 shadow-lg shadow-emerald-500/10"
+                            onClick={() => (window as any).Supademo?.open('cmjmiy7hw53323zz213e9zkry')}
+                        >
+                            <Globe className="mr-2 w-6 h-6 text-emerald-400" />
+                            Interactive Tour
+                        </Button>
                     </motion.div>
 
                     {/* Dashboard Preview with 3D Tilt Effect */}
@@ -327,6 +331,90 @@ const LandingPage = () => {
                             </div>
                         </div>
                     </motion.div>
+                </section>
+
+                {/* Why SubTrack Section (Comparisons) */}
+                <section className="max-w-6xl mx-auto px-6 py-40 relative z-20">
+                    <div className="text-center mb-20">
+                        <motion.h2
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            className="text-4xl md:text-6xl font-bold tracking-tight mb-6"
+                        >
+                            Why SubTrack?
+                        </motion.h2>
+                        <p className="text-slate-400 text-xl max-w-3xl mx-auto">
+                            Most SaaS managers are built for accountants.
+                            SubTrack is built for <span className="text-white font-bold">developers</span> who care about their infrastructure.
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                        <motion.div
+                            initial={{ opacity: 0, x: -30 }}
+                            whileInView={{ opacity: 1, x: 0 }}
+                            viewport={{ once: true }}
+                            className="space-y-8"
+                        >
+                            {[
+                                {
+                                    title: "Infrastructure-Aware Scanning",
+                                    desc: "Unlike generic trackers, we don't just look at credit card statements. We connect to your GitHub, AWS, and Vercel APIs to check actual activity. If a repository has no commits for 90 days, we'll flag it."
+                                },
+                                {
+                                    title: "Developer-First Ecosystem",
+                                    desc: "Direct integrations with Linear, Sentry, Resend, and Clerk. We understand the developer stack like no one else, identifying overlaps between similar tools."
+                                },
+                                {
+                                    title: "The 'Savage' Advantage",
+                                    desc: "Our AI doesn't just suggest savings; it roasted your wasteful habits. Get blunt, actionable insights that actually help you cut costs instantly."
+                                }
+                            ].map((item, idx) => (
+                                <div key={idx} className="flex gap-5">
+                                    <div className="mt-1 flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center text-emerald-400 font-bold">
+                                        {idx + 1}
+                                    </div>
+                                    <div>
+                                        <h4 className="text-xl font-bold text-white mb-2">{item.title}</h4>
+                                        <p className="text-slate-400 leading-relaxed">{item.desc}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </motion.div>
+
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            whileInView={{ opacity: 1, scale: 1 }}
+                            viewport={{ once: true }}
+                            className="rounded-3xl border border-white/10 bg-slate-900/40 p-1 overflow-hidden"
+                        >
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-white/5">
+                                        <th className="p-5 text-sm font-bold border-b border-white/10 uppercase tracking-widest text-slate-500">Feature</th>
+                                        <th className="p-5 text-sm font-bold border-b border-white/10 uppercase tracking-widest text-emerald-400">SubTrack</th>
+                                        <th className="p-5 text-sm font-bold border-b border-white/10 uppercase tracking-widest text-slate-500">Generic Managers</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="text-slate-300">
+                                    {[
+                                        ["API Integrations", "GitHub/AWS/Vercel", "Email/Bank Only"],
+                                        ["Usage Analysis", "Commits/Deploys", "Price Paid Only"],
+                                        ["Developer Stack", "Deep (Linear/Clerk)", "Non-existent"],
+                                        ["AI Personality", "Savage Insights", "Boring Reports"],
+                                        ["Setup Speed", "< 2 Minutes", "Weeks of Manual Work"]
+                                    ].map((row, idx) => (
+                                        <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                            <td className="p-5 font-medium">{row[0]}</td>
+                                            <td className="p-5 font-bold text-emerald-400">{row[1]}</td>
+                                            <td className="p-5 text-slate-500">{row[2]}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </motion.div>
+                    </div>
                 </section>
 
                 {/* Features Grid */}
