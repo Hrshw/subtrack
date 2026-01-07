@@ -1,9 +1,14 @@
 import Navbar from '../components/Navbar';
+import Meta from '../components/Meta';
 
 const Privacy = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950">
+            <Meta
+                title="Privacy Policy"
+                description="Your data security and privacy are our top priorities. Read our transparent privacy policy regarding your connected developer tools."
+            />
             <Navbar />
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-32 pb-20">
                 <h1 className="text-5xl font-bold text-white mb-4">Privacy Policy</h1>

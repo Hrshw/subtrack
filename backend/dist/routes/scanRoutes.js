@@ -50,6 +50,10 @@ const auth_1 = require("../middleware/auth");
 const Connection_1 = require("../models/Connection");
 const IntegrationService_1 = require("../services/IntegrationService");
 const ScanResult_1 = require("../models/ScanResult");
+const BillingSummary_1 = require("../models/BillingSummary");
+const User_1 = require("../models/User");
+const AnalyticsService_1 = require("../services/AnalyticsService");
+const RobotService_1 = require("../services/RobotService");
 const router = express_1.default.Router();
 router.use(auth_1.requireAuth);
 // Cache duration: 1 hour (in milliseconds)
@@ -62,7 +66,11 @@ router.post('/trigger', (req, res) => __awaiter(void 0, void 0, void 0, function
         const { User } = yield Promise.resolve().then(() => __importStar(require('../models/User')));
         let user = yield User.findOne({ clerkId });
         if (!user) {
-            user = yield User.create({ clerkId, email: `${clerkId}@temp.clerk` });
+            user = yield User.create({
+                clerkId,
+                email: `${clerkId}@temp.clerk`,
+                name: 'User'
+            });
             console.log(`Auto-created user: ${clerkId}`);
         }
         const connections = yield Connection_1.Connection.find({ userId: user._id });
@@ -131,19 +139,25 @@ router.post('/trigger', (req, res) => __awaiter(void 0, void 0, void 0, function
             });
             console.log(`🗑️  Deleted ${deleteResult.deletedCount} old results for ${conn.provider}`);
         }
-        // Run fresh scans only for new/stale connections
+        // Run fresh scans in parallel for new/stale connections
         const results = [];
-        for (const conn of connectionsToScan) {
-            const integration = (0, IntegrationService_1.getIntegration)(conn.provider);
-            if (integration) {
-                yield integration.scan(conn);
-                results.push(`Scanned ${conn.provider}`);
-                // Update last scanned timestamp
-                yield Connection_1.Connection.findByIdAndUpdate(conn._id, {
-                    lastScannedAt: new Date()
-                });
+        yield Promise.all(connectionsToScan.map((conn) => __awaiter(void 0, void 0, void 0, function* () {
+            try {
+                const integration = (0, IntegrationService_1.getIntegration)(conn.provider);
+                if (integration) {
+                    yield integration.scan(conn);
+                    results.push(`Scanned ${conn.provider}`);
+                    // Update last scanned timestamp
+                    yield Connection_1.Connection.findByIdAndUpdate(conn._id, {
+                        lastScannedAt: new Date()
+                    });
+                }
             }
-        }
+            catch (err) {
+                console.error(`Error scanning ${conn.provider}:`, err);
+                // We don't throw here to allow other scans to finish
+            }
+        })));
         // Fetch ALL results (old + new merged)
         const scanResults = yield ScanResult_1.ScanResult.find({ userId: user._id })
             .populate('connectionId', 'provider')
@@ -158,6 +172,10 @@ router.post('/trigger', (req, res) => __awaiter(void 0, void 0, void 0, function
             scannedCount: connectionsToScan.length,
             totalConnections: connections.length
         });
+        // Trigger community stats update in background
+        AnalyticsService_1.AnalyticsService.updateCommunityStats().catch(err => console.error('Failed to update community stats after scan:', err));
+        // Clear robot cache to force fresh advice
+        RobotService_1.RobotService.clearCache(user._id.toString()).catch(err => console.error('Failed to clear robot cache after scan:', err));
     }
     catch (error) {
         console.error(error);
@@ -171,7 +189,11 @@ router.get('/results', (req, res) => __awaiter(void 0, void 0, void 0, function*
         const { User } = yield Promise.resolve().then(() => __importStar(require('../models/User')));
         let user = yield User.findOne({ clerkId });
         if (!user) {
-            user = yield User.create({ clerkId, email: `${clerkId}@temp.clerk` });
+            user = yield User.create({
+                clerkId,
+                email: `${clerkId}@temp.clerk`,
+                name: 'User'
+            });
             console.log(`Auto-created user: ${clerkId}`);
         }
         const results = yield ScanResult_1.ScanResult.find({ userId: user._id })
@@ -181,6 +203,23 @@ router.get('/results', (req, res) => __awaiter(void 0, void 0, void 0, function*
     }
     catch (error) {
         res.status(500).json({ message: 'Error fetching results' });
+    }
+}));
+router.get('/billing/:connectionId', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        // @ts-ignore
+        const clerkId = req.auth.userId;
+        const user = yield User_1.User.findOne({ clerkId });
+        if (!user)
+            return res.status(404).json({ message: 'User not found' });
+        const history = yield BillingSummary_1.BillingSummary.find({
+            userId: user._id,
+            connectionId: req.params.connectionId
+        }).sort({ billingPeriod: 1 });
+        res.json(history);
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Error fetching billing history' });
     }
 }));
 exports.default = router;

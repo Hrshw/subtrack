@@ -4,11 +4,13 @@ import { motion } from 'framer-motion';
 import { CheckCircle2, Sparkles, Crown, Zap, Shield, Star, ArrowRight } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import Confetti from 'react-confetti';
+import { useCurrency } from '../contexts/CurrencyContext';
 
 const PaymentSuccess = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const [showConfetti, setShowConfetti] = useState(true);
+    const { formatAmount } = useCurrency();
 
     const txnid = searchParams.get('txnid');
     const amount = searchParams.get('amount');
@@ -20,10 +22,10 @@ const PaymentSuccess = () => {
     }, []);
 
     const features = [
-        { icon: Zap, text: 'Unlimited connections' },
-        { icon: Shield, text: 'Deep AWS Scan' },
+        { icon: Zap, text: 'Unlimited connections & Multi-Account Support' },
+        { icon: Shield, text: 'Deep AWS/GCP/Azure Scan' },
         { icon: Sparkles, text: 'Savage AI Recommendations' },
-        { icon: Star, text: 'Weekly Auto-Scans' },
+        { icon: Star, text: 'Weekly Auto-Scans & Slack Pulse' },
         { icon: Crown, text: 'Priority Support' },
     ];
 
@@ -94,7 +96,7 @@ const PaymentSuccess = () => {
                                 {amount && (
                                     <div className="text-right">
                                         <p className="text-slate-400 text-sm">Amount</p>
-                                        <p className="text-emerald-400 font-bold">₹{parseFloat(amount).toLocaleString()}</p>
+                                        <p className="text-emerald-400 font-bold">{formatAmount(parseFloat(amount))}</p>
                                     </div>
                                 )}
                             </motion.div>

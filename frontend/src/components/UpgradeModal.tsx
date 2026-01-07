@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from './ui/button';
 import { motion } from 'framer-motion';
 import { Crown, Check, Zap, TrendingUp, Lock, Sparkles } from 'lucide-react';
+import { useCurrency } from '../contexts/CurrencyContext';
 
 interface UpgradeModalProps {
     isOpen: boolean;
@@ -11,6 +12,8 @@ interface UpgradeModalProps {
 }
 
 const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, potentialSavings }) => {
+    const { formatAmount } = useCurrency();
+
     const handleUpgrade = () => {
         // Redirect to checkout page
         window.location.href = '/checkout';
@@ -38,7 +41,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, potentialS
                     <DialogDescription className="text-center text-slate-300 text-lg">
                         {potentialSavings > 0 ? (
                             <>
-                                You've found <span className="font-bold text-emerald-400">₹{potentialSavings.toLocaleString('en-IN')}/month</span> in savings.
+                                You've found <span className="font-bold text-emerald-400">{formatAmount(potentialSavings)}/month</span> in savings.
                                 <br />
                                 Pro pays for itself <span className="font-bold text-amber-400">{roi}x over</span> instantly.
                             </>
@@ -52,18 +55,18 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, potentialS
                     {/* Pricing */}
                     <div className="text-center">
                         <div className="flex items-center justify-center gap-2 mb-2">
-                            <span className="text-4xl font-black text-white">₹799</span>
+                            <span className="text-4xl font-black text-white">{formatAmount(799 * 85)}</span>
                             <span className="text-slate-400">/month</span>
                         </div>
                         <p className="text-sm text-emerald-400">
-                            Save ₹{((potentialSavings - 799) * 12).toLocaleString('en-IN')}/year after paying ₹9,588
+                            Save {formatAmount((potentialSavings - 799 * 85) * 12)}/year after paying {formatAmount(9588 * 85)}
                         </p>
                     </div>
 
                     {/* Features */}
                     <div className="space-y-3">
                         {[
-                            { icon: Sparkles, text: 'Unlimited connections to all 8 integrations', highlight: true },
+                            { icon: Sparkles, text: 'Unlimited connections & Multi-Account Support', highlight: true },
                             { icon: Zap, text: 'Weekly automatic scans (never miss a leak)', highlight: true },
                             { icon: TrendingUp, text: 'Savings history & trend charts' },
                             { icon: Lock, text: 'Priority support & early access to new features' },
@@ -97,7 +100,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, potentialS
                             Upgrade to Pro Now
                         </Button>
                         <p className="text-center text-xs text-slate-400">
-                            Secure payment via PayU • Cancel anytime • 7-day money-back guarantee
+                            Secure payment via Polar • Cancel anytime
                         </p>
                     </div>
                 </div>

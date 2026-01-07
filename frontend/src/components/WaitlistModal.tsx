@@ -10,6 +10,7 @@ import { getApiUrl } from '../lib/api';
 import axios from 'axios';
 import { toast } from 'sonner';
 import Confetti from 'react-confetti';
+import { useCurrency } from '../contexts/CurrencyContext';
 
 interface WaitlistModalProps {
     isOpen: boolean;
@@ -19,6 +20,7 @@ interface WaitlistModalProps {
 
 const WaitlistModal: React.FC<WaitlistModalProps> = ({ isOpen, onClose, potentialSavings }) => {
     const { getToken, userId } = useAuth();
+    const { formatAmount, getSymbol } = useCurrency();
     const [loading, setLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [email, setEmail] = useState('');
@@ -84,7 +86,7 @@ const WaitlistModal: React.FC<WaitlistModalProps> = ({ isOpen, onClose, potentia
                         <DialogDescription className="text-center text-slate-300 text-base md:text-lg">
                             {potentialSavings > 0 ? (
                                 <>
-                                    You've found <span className="font-bold text-emerald-400">₹{potentialSavings.toLocaleString('en-IN')}/month</span> in savings.
+                                    You've found <span className="font-bold text-emerald-400">{formatAmount(potentialSavings)}/month</span> in savings.
                                     <br />
                                     Get <span className="font-bold text-amber-400">first access</span> when Pro launches!
                                 </>
@@ -100,7 +102,7 @@ const WaitlistModal: React.FC<WaitlistModalProps> = ({ isOpen, onClose, potentia
                             <div className="space-y-2 md:space-y-3">
                                 <h3 className="text-sm font-semibold text-amber-400 mb-3">What you'll get with Pro:</h3>
                                 {[
-                                    { icon: Sparkles, text: 'Unlimited connections to all 8 integrations' },
+                                    { icon: Sparkles, text: 'Unlimited connections & Multi-Account Support' },
                                     { icon: Zap, text: 'Weekly automatic scans (never miss a leak)' },
                                     { icon: TrendingUp, text: 'Savings history & trend charts' },
                                     { icon: Lock, text: 'Priority support & early access' },
@@ -139,7 +141,7 @@ const WaitlistModal: React.FC<WaitlistModalProps> = ({ isOpen, onClose, potentia
                                     <Input
                                         id="savings"
                                         type="number"
-                                        placeholder="Enter amount in ₹"
+                                        placeholder={`Enter amount in ${getSymbol()}`}
                                         value={expectedSavings}
                                         onChange={(e) => setExpectedSavings(e.target.value)}
                                         className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 focus:border-emerald-500"

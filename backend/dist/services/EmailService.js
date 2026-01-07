@@ -18,6 +18,8 @@ const render_1 = require("@react-email/render");
 const resend_1 = require("resend");
 const MonthlyDigest_1 = require("../emails/MonthlyDigest");
 const LeakAlert_1 = require("../emails/LeakAlert");
+const WelcomeEmail_1 = require("../emails/WelcomeEmail");
+const WaitlistEmail_1 = require("../emails/WaitlistEmail");
 const apiKey = process.env.RESEND_API_KEY;
 const resend = apiKey ? new resend_1.Resend(apiKey) : null;
 class EmailService {
@@ -32,7 +34,7 @@ class EmailService {
                     savings,
                     zombies,
                 }));
-                const fromAddress = process.env.RESEND_FROM_EMAIL || 'SubTrack <reports@subtrack.app>';
+                const fromAddress = process.env.RESEND_FROM_EMAIL || 'SubTrack <reports@subtrack.pulseguard.in>';
                 yield resend.emails.send({
                     from: fromAddress,
                     to,
@@ -58,7 +60,7 @@ class EmailService {
                     potentialSavings,
                     reason,
                 }));
-                const fromAddress = process.env.RESEND_FROM_EMAIL || 'SubTrack <alerts@subtrack.app>';
+                const fromAddress = process.env.RESEND_FROM_EMAIL || 'SubTrack <alerts@subtrack.pulseguard.in>';
                 yield resend.emails.send({
                     from: fromAddress,
                     to,
@@ -79,8 +81,8 @@ class EmailService {
                 return;
             }
             try {
-                const supportEmail = 'support@untuuga.resend.app'; // Target support address
-                const fromAddress = process.env.RESEND_FROM_EMAIL || 'SubTrack Support <support@subtrack.app>';
+                const supportEmail = 'support@subtrack.pulseguard.in'; // Target support address
+                const fromAddress = process.env.RESEND_FROM_EMAIL || 'SubTrack Support <support@subtrack.pulseguard.in>';
                 yield resend.emails.send({
                     from: fromAddress,
                     to: supportEmail,
@@ -100,6 +102,54 @@ class EmailService {
             }
             catch (error) {
                 console.error('Failed to send support ticket:', error);
+            }
+        });
+    }
+    static sendWelcomeEmail(to, userName) {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (!resend) {
+                console.warn('RESEND_API_KEY is not configured. Skipping email send.');
+                return;
+            }
+            try {
+                const html = yield (0, render_1.render)(react_1.default.createElement(WelcomeEmail_1.WelcomeEmail, {
+                    userName,
+                }));
+                const fromAddress = process.env.RESEND_FROM_EMAIL || 'SubTrack <welcome@subtrack.pulseguard.in>';
+                yield resend.emails.send({
+                    from: fromAddress,
+                    to,
+                    subject: `Welcome to SubTrack, ${userName}! 🚀`,
+                    html,
+                });
+                console.log(`📧 Welcome email sent to ${to}`);
+            }
+            catch (error) {
+                console.error('Failed to send welcome email:', error);
+            }
+        });
+    }
+    static sendWaitlistEmail(to, position) {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (!resend) {
+                console.warn('RESEND_API_KEY is not configured. Skipping email send.');
+                return;
+            }
+            try {
+                const html = yield (0, render_1.render)(react_1.default.createElement(WaitlistEmail_1.WaitlistEmail, {
+                    position,
+                }));
+                const fromAddress = process.env.RESEND_FROM_EMAIL || 'SubTrack <waitlist@subtrack.pulseguard.in>';
+                yield resend.emails.send({
+                    from: fromAddress,
+                    to,
+                    subject: `You're #${position} on the SubTrack Waitlist! 🚀`,
+                    html,
+                });
+                console.log(`📧 Waitlist confirmation sent to ${to}`);
+            }
+            catch (error) {
+                console.error('Failed to send waitlist confirmation:', error);
             }
         });
     }

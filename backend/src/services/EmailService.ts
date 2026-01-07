@@ -3,6 +3,8 @@ import { render } from '@react-email/render';
 import { Resend } from 'resend';
 import { MonthlyDigest } from '../emails/MonthlyDigest';
 import { LeakAlert } from '../emails/LeakAlert';
+import { WelcomeEmail } from '../emails/WelcomeEmail';
+import { WaitlistEmail } from '../emails/WaitlistEmail';
 
 interface DigestResult {
     resourceName: string;
@@ -28,7 +30,7 @@ export class EmailService {
                 })
             );
 
-            const fromAddress = process.env.RESEND_FROM_EMAIL || 'SubTrack <reports@subtrack.app>';
+            const fromAddress = process.env.RESEND_FROM_EMAIL || 'SubTrack <reports@subtrack.pulseguard.in>';
 
             await resend.emails.send({
                 from: fromAddress,
@@ -57,7 +59,7 @@ export class EmailService {
                 })
             );
 
-            const fromAddress = process.env.RESEND_FROM_EMAIL || 'SubTrack <alerts@subtrack.app>';
+            const fromAddress = process.env.RESEND_FROM_EMAIL || 'SubTrack <alerts@subtrack.pulseguard.in>';
 
             await resend.emails.send({
                 from: fromAddress,
@@ -78,8 +80,8 @@ export class EmailService {
         }
 
         try {
-            const supportEmail = 'support@untuuga.resend.app'; // Target support address
-            const fromAddress = process.env.RESEND_FROM_EMAIL || 'SubTrack Support <support@subtrack.app>';
+            const supportEmail = 'support@subtrack.pulseguard.in'; // Target support address
+            const fromAddress = process.env.RESEND_FROM_EMAIL || 'SubTrack Support <support@subtrack.pulseguard.in>';
 
             await resend.emails.send({
                 from: fromAddress,
@@ -99,6 +101,60 @@ export class EmailService {
             console.log(`📧 Support ticket from ${userEmail} forwarded to team`);
         } catch (error) {
             console.error('Failed to send support ticket:', error);
+        }
+    }
+
+    static async sendWelcomeEmail(to: string, userName: string) {
+        if (!resend) {
+            console.warn('RESEND_API_KEY is not configured. Skipping email send.');
+            return;
+        }
+
+        try {
+            const html = await render(
+                React.createElement(WelcomeEmail, {
+                    userName,
+                })
+            );
+
+            const fromAddress = process.env.RESEND_FROM_EMAIL || 'SubTrack <welcome@subtrack.pulseguard.in>';
+
+            await resend.emails.send({
+                from: fromAddress,
+                to,
+                subject: `Welcome to SubTrack, ${userName}! 🚀`,
+                html,
+            });
+            console.log(`📧 Welcome email sent to ${to}`);
+        } catch (error) {
+            console.error('Failed to send welcome email:', error);
+        }
+    }
+
+    static async sendWaitlistEmail(to: string, position: number) {
+        if (!resend) {
+            console.warn('RESEND_API_KEY is not configured. Skipping email send.');
+            return;
+        }
+
+        try {
+            const html = await render(
+                React.createElement(WaitlistEmail, {
+                    position,
+                })
+            );
+
+            const fromAddress = process.env.RESEND_FROM_EMAIL || 'SubTrack <waitlist@subtrack.pulseguard.in>';
+
+            await resend.emails.send({
+                from: fromAddress,
+                to,
+                subject: `You're #${position} on the SubTrack Waitlist! 🚀`,
+                html,
+            });
+            console.log(`📧 Waitlist confirmation sent to ${to}`);
+        } catch (error) {
+            console.error('Failed to send waitlist confirmation:', error);
         }
     }
 }

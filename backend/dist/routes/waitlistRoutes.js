@@ -14,6 +14,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const Waitlist_1 = require("../models/Waitlist");
+const EmailService_1 = require("../services/EmailService");
 const router = express_1.default.Router();
 // Join waitlist
 router.post('/join', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
@@ -40,6 +41,10 @@ router.post('/join', (req, res) => __awaiter(void 0, void 0, void 0, function* (
             position
         });
         console.log(`✅ User ${clerkId} joined waitlist at position #${position}`);
+        // Send confirmation email
+        if (email) {
+            yield EmailService_1.EmailService.sendWaitlistEmail(email, position);
+        }
         res.json({
             message: 'Successfully joined waitlist',
             position

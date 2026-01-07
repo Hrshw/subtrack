@@ -6,10 +6,15 @@ export const getRobotSpeech = async (req: Request, res: Response) => {
     try {
         // @ts-ignore
         const clerkId = req.auth.userId;
-        const user = await User.findOne({ clerkId });
+        let user = await User.findOne({ clerkId });
 
         if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+            user = await User.create({
+                clerkId,
+                email: `${clerkId}@temp.clerk`,
+                name: 'User'
+            });
+            console.log(`Auto-created user for robot: ${clerkId}`);
         }
 
         const speech = await RobotService.getRobotSpeech(user._id.toString());
@@ -30,9 +35,14 @@ export const sendChatMessage = async (req: Request, res: Response) => {
             return res.status(400).json({ message: 'Message is required' });
         }
 
-        const user = await User.findOne({ clerkId });
+        let user = await User.findOne({ clerkId });
         if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+            user = await User.create({
+                clerkId,
+                email: `${clerkId}@temp.clerk`,
+                name: 'User'
+            });
+            console.log(`Auto-created user for chat: ${clerkId}`);
         }
 
         const response = await RobotService.handleChatMessage(user._id.toString(), message);

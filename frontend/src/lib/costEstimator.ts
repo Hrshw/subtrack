@@ -1,7 +1,7 @@
 // Cost estimation for cloud resources
 // All costs are in INR per month (approximate)
 
-const USD_TO_INR = 85;
+const USD_TO_INR = 85; // TODO: Fetch from external API for production accuracy
 
 // AWS Pricing (monthly estimates in USD)
 const AWS_PRICING = {

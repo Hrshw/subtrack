@@ -49,7 +49,7 @@ export const LeakAlert = ({
                     </Section>
 
                     <Section style={content}>
-                        <Button style={button} href="https://subtrack.app/dashboard">
+                        <Button style={button} href="https://subtrack.pulseguard.in/dashboard">
                             Fix This Leak
                         </Button>
                     </Section>
@@ -57,7 +57,7 @@ export const LeakAlert = ({
                     <Hr style={hr} />
 
                     <Section style={footer}>
-                        <Link href="https://subtrack.app/settings" style={link}>
+                        <Link href="https://subtrack.pulseguard.in/settings" style={link}>
                             Manage Alert Settings
                         </Link>
                     </Section>

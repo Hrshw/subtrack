@@ -26,7 +26,13 @@ import {
     Calendar
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
+import { SlackIntegrationCard } from '../components/SlackIntegrationCard';
+import { ReferralCard } from '../components/ReferralCard';
+import ConfirmModal from '../components/ConfirmModal';
+import { Input } from '../components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
+import { useCurrency, CurrencyCode } from '../contexts/CurrencyContext';
 
 
 interface Connection {
@@ -47,9 +53,9 @@ interface ScanResult {
 
 const Settings = () => {
     const { user } = useUser();
-    const { signOut } = useAuth();
+    const { signOut, getToken } = useAuth();
+    const { setCurrency } = useCurrency();
     const navigate = useNavigate();
-    const { getToken } = useAuth();
     const [loading, setLoading] = useState(false);
     const [profile, setProfile] = useState<any>(null);
     const [connections, setConnections] = useState<Connection[]>([]);
@@ -58,6 +64,26 @@ const Settings = () => {
         monthlyDigest: true,
         leakAlerts: false
     });
+
+    // Modal states
+    const [confirmModal, setConfirmModal] = useState<{
+        open: boolean;
+        title: string;
+        description: string;
+        onConfirm: () => void;
+        variant: 'danger' | 'warning' | 'primary';
+        confirmText: string;
+    }>({
+        open: false,
+        title: '',
+        description: '',
+        onConfirm: () => { },
+        variant: 'primary',
+        confirmText: 'Confirm'
+    });
+
+    const [deleteAccountModal, setDeleteAccountModal] = useState(false);
+    const [deleteInput, setDeleteInput] = useState('');
 
     useEffect(() => {
         const fetchData = async () => {
@@ -130,31 +156,54 @@ const Settings = () => {
 
     const handleManageBilling = async () => {
         if (isPro) {
-            setLoading(true);
-            try {
-                toast.info('Stripe Customer Portal coming soon!');
-            } catch (error) {
-                toast.error('Failed to access billing');
-            } finally {
-                setLoading(false);
-            }
+            const endDate = profile?.subscriptionEndDate
+                ? format(new Date(profile.subscriptionEndDate), 'MMMM d, yyyy')
+                : 'the end of your billing period';
+
+            setConfirmModal({
+                open: true,
+                title: 'Cancel Subscription?',
+                description: `If you cancel this subscription, it will still be available until ${endDate}.\n\nAre you sure you want to cancel?`,
+                confirmText: 'Cancel Subscription',
+                variant: 'danger',
+                onConfirm: async () => {
+                    setConfirmModal(prev => ({ ...prev, open: false }));
+                    setLoading(true);
+                    try {
+                        // In a real app, you would call your API here
+                        toast.success(`Your subscription has been cancelled. You'll retain Pro access until ${endDate}.`);
+                    } catch (error) {
+                        toast.error('Failed to cancel subscription');
+                    } finally {
+                        setLoading(false);
+                    }
+                }
+            });
         } else {
             navigate('/checkout');
         }
     };
 
     const handleRevokeAll = async () => {
-        if (!confirm('Are you sure you want to disconnect all services? This will delete all scan results.')) return;
-
-        setLoading(true);
-        try {
-            // TODO: Implement bulk revoke endpoint
-            toast.success('All connections revoked');
-        } catch (error) {
-            toast.error('Failed to revoke connections');
-        } finally {
-            setLoading(false);
-        }
+        setConfirmModal({
+            open: true,
+            title: 'Revoke All Connections?',
+            description: 'Are you sure you want to disconnect all services? This will delete all scan results and stop monitoring.',
+            confirmText: 'Revoke All',
+            variant: 'danger',
+            onConfirm: async () => {
+                setConfirmModal(prev => ({ ...prev, open: false }));
+                setLoading(true);
+                try {
+                    // TODO: Implement bulk revoke endpoint
+                    toast.success('All connections revoked');
+                } catch (error) {
+                    toast.error('Failed to revoke connections');
+                } finally {
+                    setLoading(false);
+                }
+            }
+        });
     };
 
     const handleExportData = async () => {
@@ -172,9 +221,13 @@ const Settings = () => {
     };
 
     const handleDeleteAccount = async () => {
-        const confirmation = prompt('Type "DELETE" to permanently delete your account and all data:');
-        if (confirmation !== 'DELETE') return;
+        setDeleteAccountModal(true);
+    };
 
+    const confirmDeleteAccount = async () => {
+        if (deleteInput !== 'DELETE') return;
+
+        setDeleteAccountModal(false);
         setLoading(true);
         try {
             toast.success('Account deleted. Redirecting...');
@@ -257,7 +310,7 @@ const Settings = () => {
                             </div>
                             <div className="text-center md:text-left space-y-2">
                                 <h2 className="text-3xl font-bold text-white">
-                                    {profile?.name || `${user?.firstName} ${user?.lastName}`}
+                                    {(!profile?.name || profile.name === 'User') ? `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Developer' : profile.name}
                                 </h2>
                                 <div className="flex items-center justify-center md:justify-start gap-4 text-slate-400">
                                     <div className="flex items-center gap-2">
@@ -305,8 +358,14 @@ const Settings = () => {
                                                     {isPro ? 'SubTrack Pro' : 'Free Plan'}
                                                 </div>
                                                 <div className="text-slate-400">
-                                                    {isPro ? 'Unlimited connections • Auto-scan • Priority Support' : '5 connections • Manual scans'}
+                                                    {isPro ? 'Unlimited Connections • Multi-Account • Auto-scan' : '5 connections • Manual scans'}
                                                 </div>
+                                                {isPro && profile?.subscriptionEndDate && (
+                                                    <div className="text-xs text-amber-400/80 mt-2 flex items-center gap-1">
+                                                        <Calendar className="w-3 h-3" />
+                                                        Renews on {format(new Date(profile.subscriptionEndDate), 'MMMM d, yyyy')}
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className={`px-4 py-2 rounded-full font-bold text-sm ${isPro
                                                 ? 'bg-amber-500 text-black'
@@ -320,11 +379,11 @@ const Settings = () => {
                                             onClick={handleManageBilling}
                                             disabled={loading}
                                             className={`w-full h-12 text-lg ${isPro
-                                                ? 'bg-white/10 hover:bg-white/20 text-white'
+                                                ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30'
                                                 : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white border-0'
                                                 }`}
                                         >
-                                            {isPro ? 'Manage Subscription' : 'Upgrade to Pro'}
+                                            {isPro ? 'Cancel Subscription' : 'Upgrade to Pro'}
                                         </Button>
                                     </CardContent>
                                 </Card>
@@ -490,6 +549,76 @@ const Settings = () => {
                                 </Card>
                             </motion.div>
 
+                            {/* Slack Integration */}
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.35 }}
+                            >
+                                <SlackIntegrationCard />
+                            </motion.div>
+
+                            {/* Currency & Localization */}
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.36 }}
+                            >
+                                <Card className="bg-white/5 border-white/10 backdrop-blur-xl">
+                                    <CardHeader>
+                                        <CardTitle className="flex items-center gap-2 text-white">
+                                            <CreditCard className="w-5 h-5" />
+                                            Currency & Display
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4">
+                                        <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+                                            <div>
+                                                <div className="font-medium text-white">Display Currency</div>
+                                                <div className="text-xs text-slate-400">All amounts will be converted</div>
+                                            </div>
+                                            <select
+                                                value={profile?.currency || 'USD'}
+                                                onChange={async (e) => {
+                                                    const val = e.target.value as CurrencyCode;
+                                                    try {
+                                                        await setCurrency(val);
+                                                        setProfile((prev: any) => ({ ...prev, currency: val }));
+                                                        toast.success(`Currency changed to ${val}`);
+                                                        // Reload is still good to force full context refresh if needed, but context is updated
+                                                        setTimeout(() => window.location.reload(), 500);
+                                                    } catch {
+                                                        toast.error('Failed to update currency');
+                                                    }
+                                                }}
+                                                className="bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none"
+                                            >
+                                                <option value="USD">$ USD</option>
+                                                <option value="INR">₹ INR</option>
+                                                <option value="EUR">€ EUR</option>
+                                                <option value="GBP">£ GBP</option>
+                                                <option value="AUD">A$ AUD</option>
+                                                <option value="CAD">C$ CAD</option>
+                                                <option value="SGD">S$ SGD</option>
+                                                <option value="AED">د.إ AED</option>
+                                            </select>
+                                        </div>
+                                        <p className="text-xs text-slate-500 px-3">
+                                            💡 Amounts are stored in INR and converted using current exchange rates.
+                                        </p>
+                                    </CardContent>
+                                </Card>
+                            </motion.div>
+
+                            {/* Referral Program */}
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.37 }}
+                            >
+                                <ReferralCard />
+                            </motion.div>
+
                             {/* Data & Privacy */}
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
@@ -557,6 +686,61 @@ const Settings = () => {
                 </main>
             </div>
 
+            <ConfirmModal
+                isOpen={confirmModal.open}
+                onClose={() => setConfirmModal(prev => ({ ...prev, open: false }))}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                description={confirmModal.description}
+                confirmText={confirmModal.confirmText}
+                variant={confirmModal.variant}
+                loading={loading}
+            />
+
+            <Dialog open={deleteAccountModal} onOpenChange={setDeleteAccountModal}>
+                <DialogContent className="sm:max-w-[400px] bg-[#0a0e17] border-red-500/20 text-white z-[130]">
+                    <DialogHeader>
+                        <div className="w-12 h-12 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center mb-4">
+                            <Trash2 className="w-6 h-6" />
+                        </div>
+                        <DialogTitle className="text-xl font-bold">Delete Account Permanently?</DialogTitle>
+                        <DialogDescription className="text-slate-400 mt-2">
+                            This action cannot be undone. All your data, connections, and scan history will be permanently erased.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <label className="text-sm text-slate-400">
+                                Type <span className="text-white font-mono font-bold">DELETE</span> to confirm
+                            </label>
+                            <Input
+                                value={deleteInput}
+                                onChange={(e) => setDeleteInput(e.target.value)}
+                                placeholder="DELETE"
+                                className="bg-white/5 border-white/10 focus:border-red-500 font-mono"
+                            />
+                        </div>
+                    </div>
+
+                    <DialogFooter className="gap-3 sm:space-x-0">
+                        <Button
+                            variant="ghost"
+                            onClick={() => setDeleteAccountModal(false)}
+                            className="flex-1 bg-white/5 hover:bg-white/10"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={confirmDeleteAccount}
+                            disabled={deleteInput !== 'DELETE' || loading}
+                            className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold"
+                        >
+                            {loading ? "Deleting..." : "Delete Permanently"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 };

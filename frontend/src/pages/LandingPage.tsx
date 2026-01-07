@@ -1,8 +1,11 @@
 import React, { useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/button';
+import Meta from '../components/Meta';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import { useAnalytics } from '../hooks/useAnalytics';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { motion, useScroll, useTransform, useSpring, useMotionValue } from 'framer-motion';
 import {
     Zap,
@@ -17,7 +20,10 @@ import {
     Terminal,
     Cpu,
     Globe,
-    Lock
+    Lock,
+    MessageSquare,
+    Gift,
+    BarChart3
 } from 'lucide-react';
 
 // ---- UTILS ----
@@ -166,14 +172,108 @@ const OdometerNumber: React.FC<{ value: number; delayOffset?: number }> = ({ val
     );
 };
 
+// ---- INTEGRATIONS MARQUEE ----
+
+const IntegrationIcon = ({ name, icon: Icon, isComingSoon }: { name: string, icon: React.ElementType, isComingSoon?: boolean }) => (
+    <div className="flex-shrink-0 flex items-center gap-3 px-6 py-3 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm group hover:border-emerald-500/30 hover:bg-emerald-500/5 transition-all duration-300">
+        <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${isComingSoon ? 'bg-slate-800 text-slate-500' : 'bg-emerald-500/10 text-emerald-400 group-hover:scale-110 transition-transform'}`}>
+            <Icon size={20} strokeWidth={2} />
+        </div>
+        <span className={`text-sm font-bold tracking-tight ${isComingSoon ? 'text-slate-500' : 'text-slate-300 group-hover:text-white transition-colors'}`}>
+            {name}
+        </span>
+        {isComingSoon && (
+            <span className="text-[10px] font-black bg-slate-800 text-slate-600 px-1.5 py-0.5 rounded uppercase tracking-tighter">
+                Soon
+            </span>
+        )}
+    </div>
+);
+
+const IntegrationsSection = () => {
+    const integrations = [
+        { name: 'AWS', icon: Server },
+        { name: 'GitHub', icon: Github },
+        { name: 'Vercel', icon: Zap },
+        { name: 'Stripe', icon: Globe },
+        { name: 'OpenAI', icon: Cpu },
+        { name: 'Linear', icon: TrendingUp },
+        { name: 'Sentry', icon: Shield },
+        { name: 'Resend', icon: Globe },
+        { name: 'Clerk', icon: Lock },
+        { name: 'DigitalOcean', icon: Server },
+        { name: 'Supabase', icon: Database },
+        { name: 'Notion', icon: Code2 },
+        { name: 'Slack', icon: MessageSquare }, // Notifications are live
+    ];
+
+    // Double the list for seamless loop
+    const displayIntegrations = [...integrations, ...integrations];
+
+    return (
+        <section className="py-20 relative overflow-hidden">
+            <div className="max-w-7xl mx-auto px-6 text-center mb-12">
+                <motion.p
+                    initial={{ opacity: 0 }}
+                    whileInView={{ opacity: 1 }}
+                    className="text-xs font-bold tracking-widest text-slate-500 uppercase mb-4"
+                >
+                    Seamless Connectivity
+                </motion.p>
+                <h2 className="text-3xl font-bold text-white">Works with your favorite tools</h2>
+            </div>
+
+            <div className="flex overflow-hidden group">
+                <motion.div
+                    animate={{ x: [0, -1920] }}
+                    transition={{
+                        duration: 40,
+                        repeat: Infinity,
+                        ease: "linear"
+                    }}
+                    className="flex gap-6 whitespace-nowrap py-4"
+                >
+                    {displayIntegrations.map((item, idx) => (
+                        <IntegrationIcon key={idx} {...item} />
+                    ))}
+                </motion.div>
+                {/* Second clone for seamlessness */}
+                <motion.div
+                    animate={{ x: [0, -1920] }}
+                    transition={{
+                        duration: 40,
+                        repeat: Infinity,
+                        ease: "linear"
+                    }}
+                    className="flex gap-6 whitespace-nowrap py-4"
+                >
+                    {displayIntegrations.map((item, idx) => (
+                        <IntegrationIcon key={idx + 100} {...item} />
+                    ))}
+                </motion.div>
+            </div>
+
+            {/* Fade Gradients */}
+            <div className="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-slate-950 to-transparent z-10" />
+            <div className="absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-slate-950 to-transparent z-10" />
+        </section>
+    );
+};
+
 // ---- MAIN LANDING PAGE ----
 
 const LandingPage = () => {
     const { scrollYProgress } = useScroll();
+    const { trackEvent } = useAnalytics();
+    const { formatAmount, getSymbol, convertAmount } = useCurrency();
     const y = useTransform(scrollYProgress, [0, 1], [0, -100]);
 
     return (
         <div className="min-h-screen bg-slate-950 text-white overflow-hidden selection:bg-emerald-500/30 font-sans">
+            <Meta
+                title="SubTrack - Smart SaaS Subscription Tracker for Developers"
+                description="SubTrack helps developers detect unused cloud resources across all accounts on AWS, GitHub, and Vercel. Optimize your SaaS spend with AI-powered 'Savage' insights."
+            />
             {/* Dynamic Background */}
             <div className="fixed inset-0 z-0">
                 <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:32px_32px]" />
@@ -197,9 +297,9 @@ const LandingPage = () => {
             {/* Navbar */}
             <Navbar />
 
-            <main className="relative z-10 pt-40 pb-20">
+            <main className="relative z-10 pt-24 md:pt-40 pb-12">
                 {/* Hero Section */}
-                <section className="max-w-7xl mx-auto px-6 text-center mb-40 perspective-[1000px]">
+                <section className="max-w-7xl mx-auto px-6 text-center mb-20 md:mb-32 perspective-[1000px]">
                     <motion.div
                         initial={{ opacity: 0, y: 20, scale: 0.9 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -220,12 +320,20 @@ const LandingPage = () => {
                         className="text-6xl md:text-8xl lg:text-9xl font-bold tracking-tighter mb-10 leading-[0.9]"
                     >
                         Stop leaking <br />
+                        <span className="sr-only">SaaS Costs and Cloud Credits</span>
                         <span className="inline-flex items-baseline gap-2 mt-2">
-                            <span className="text-emerald-400 text-5xl md:text-7xl lg:text-8xl align-top">₹</span>
-                            <OdometerNumber value={30000} delayOffset={0.5} />
+                            <span className="text-emerald-400 text-5xl md:text-7xl lg:text-8xl align-top">{getSymbol()}</span>
+                            <OdometerNumber value={convertAmount(430 * 85)} delayOffset={0.5} />
                             <span className="text-4xl md:text-6xl lg:text-7xl text-emerald-400/80 font-light ml-2">/mo</span>
                         </span>
                     </motion.h1>
+
+                    {/* Executive Summary for AI Extraction */}
+                    <div className="sr-only">
+                        <h2>SaaS and Infrastructure Cost Optimization Summary</h2>
+                        <p>SubTrack is a developer-first SaaS tracker that automatically detects unused cloud resources across all your accounts and sub-accounts for 14+ providers including AWS, GCP, Azure, GitHub, Vercel, DigitalOcean, and OpenAI. It identifies 'Zombie' subscriptions and 'Shadow SaaS' through direct API integrations, helping startups save an average of {formatAmount(350 * 85)} per month on unattached elastic IPs, unused GitHub seats, and over-provisioned cloud instances.</p>
+                    </div>
+
 
                     <motion.p
                         initial={{ opacity: 0, y: 20 }}
@@ -235,7 +343,7 @@ const LandingPage = () => {
                     >
                         Automatically detect unused subscriptions, idle cloud resources, and forgotten developer tools.
                         <br />
-                        Connect <span className="text-white font-semibold">GitHub</span>, <span className="text-white font-semibold">Vercel</span> & <span className="text-white font-semibold">AWS</span> for instant cost insights.
+                        Connect all your accounts across <span className="text-white font-semibold">14+ services</span> like AWS, GCP, Azure, GitHub & Vercel for instant insights.
                     </motion.p>
 
                     <motion.div
@@ -245,7 +353,11 @@ const LandingPage = () => {
                         className="flex flex-col sm:flex-row items-center justify-center gap-6"
                     >
                         <Link to="/sign-up">
-                            <Button size="lg" className="h-16 px-10 text-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold shadow-[0_0_40px_-10px_rgba(16,185,129,0.5)] hover:shadow-[0_0_60px_-10px_rgba(16,185,129,0.6)] rounded-full transition-all hover:scale-105 active:scale-95">
+                            <Button
+                                size="lg"
+                                className="h-16 px-10 text-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold shadow-[0_0_40px_-10px_rgba(16,185,129,0.5)] hover:shadow-[0_0_60px_-10px_rgba(16,185,129,0.6)] rounded-full transition-all hover:scale-105 active:scale-95"
+                                onClick={() => trackEvent('sign_up_click', { location: 'hero' })}
+                            >
                                 Start Saving Free
                                 <ArrowRight className="ml-2 w-6 h-6" />
                             </Button>
@@ -261,13 +373,15 @@ const LandingPage = () => {
                         </Button>
                     </motion.div>
 
+                    <IntegrationsSection />
+
                     {/* Dashboard Preview with 3D Tilt Effect */}
                     <motion.div
                         style={{ y, rotateX: 15 }}
                         initial={{ opacity: 0, scale: 0.8, rotateX: 45 }}
                         animate={{ opacity: 1, scale: 1, rotateX: 15 }}
                         transition={{ duration: 1.2, delay: 0.4, type: "spring", bounce: 0.2 }}
-                        className="mt-32 relative mx-auto max-w-6xl group perspective-[2000px]"
+                        className="mt-16 md:mt-32 relative mx-auto max-w-6xl group perspective-[2000px]"
                     >
                         <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-[2rem] blur-xl opacity-20 group-hover:opacity-30 transition-opacity duration-500" />
                         <div className="relative rounded-2xl border border-slate-800 bg-slate-900/90 backdrop-blur-2xl overflow-hidden shadow-2xl transform transition-transform duration-500 group-hover:scale-[1.01]">
@@ -280,7 +394,7 @@ const LandingPage = () => {
                                 </div>
                                 <div className="mx-auto flex items-center gap-2 px-4 py-1 rounded-full bg-slate-900 border border-slate-800 text-xs font-medium text-slate-500">
                                     <Lock className="w-3 h-3" />
-                                    dashboard.subtrack.app
+                                    subtrack.pulseguard.in
                                 </div>
                             </div>
 
@@ -298,7 +412,7 @@ const LandingPage = () => {
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <div className="text-red-400 font-bold text-xl">-₹340/mo</div>
+                                            <div className="text-red-400 font-bold text-xl">{formatAmount(340)}/mo</div>
                                             <div className="text-xs font-bold bg-red-500/10 text-red-400 px-2 py-1 rounded uppercase tracking-wider mt-1 inline-block">Zombie</div>
                                         </div>
                                     </div>
@@ -314,7 +428,7 @@ const LandingPage = () => {
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <div className="text-amber-400 font-bold text-xl">-₹1,600/mo</div>
+                                            <div className="text-amber-400 font-bold text-xl">{formatAmount(1600)}/mo</div>
                                             <div className="text-xs font-bold bg-amber-500/10 text-amber-400 px-2 py-1 rounded uppercase tracking-wider mt-1 inline-block">Downgrade</div>
                                         </div>
                                     </div>
@@ -324,7 +438,7 @@ const LandingPage = () => {
                                     <div className="absolute inset-0 bg-emerald-500/5 blur-xl" />
                                     <div className="relative z-10">
                                         <div className="text-sm text-emerald-400 font-bold uppercase tracking-widest mb-4">Potential Savings</div>
-                                        <div className="text-5xl font-black text-white mb-2 tracking-tight">₹47,200</div>
+                                        <div className="text-5xl font-black text-white mb-2 tracking-tight">{formatAmount(47200)}</div>
                                         <div className="text-sm text-emerald-400/60">per year</div>
                                     </div>
                                 </div>
@@ -334,8 +448,8 @@ const LandingPage = () => {
                 </section>
 
                 {/* Why SubTrack Section (Comparisons) */}
-                <section className="max-w-6xl mx-auto px-6 py-40 relative z-20">
-                    <div className="text-center mb-20">
+                <section className="max-w-6xl mx-auto px-6 py-16 md:py-24 relative z-20">
+                    <div className="text-center mb-10 md:mb-16">
                         <motion.h2
                             initial={{ opacity: 0, y: 20 }}
                             whileInView={{ opacity: 1, y: 0 }}
@@ -387,28 +501,28 @@ const LandingPage = () => {
                             initial={{ opacity: 0, scale: 0.9 }}
                             whileInView={{ opacity: 1, scale: 1 }}
                             viewport={{ once: true }}
-                            className="rounded-3xl border border-white/10 bg-slate-900/40 p-1 overflow-hidden"
+                            className="rounded-3xl border border-white/10 bg-slate-900/40 p-1 overflow-x-auto"
                         >
-                            <table className="w-full text-left border-collapse">
+                            <table className="w-full text-left border-collapse min-w-[500px]">
                                 <thead>
                                     <tr className="bg-white/5">
-                                        <th className="p-5 text-sm font-bold border-b border-white/10 uppercase tracking-widest text-slate-500">Feature</th>
-                                        <th className="p-5 text-sm font-bold border-b border-white/10 uppercase tracking-widest text-emerald-400">SubTrack</th>
-                                        <th className="p-5 text-sm font-bold border-b border-white/10 uppercase tracking-widest text-slate-500">Generic Managers</th>
+                                        <th className="p-3 md:p-5 text-xs md:text-sm font-bold border-b border-white/10 uppercase tracking-widest text-slate-500">Feature</th>
+                                        <th className="p-3 md:p-5 text-xs md:text-sm font-bold border-b border-white/10 uppercase tracking-widest text-emerald-400">SubTrack</th>
+                                        <th className="p-3 md:p-5 text-xs md:text-sm font-bold border-b border-white/10 uppercase tracking-widest text-slate-500">Generic Managers</th>
                                     </tr>
                                 </thead>
                                 <tbody className="text-slate-300">
                                     {[
-                                        ["API Integrations", "GitHub/AWS/Vercel", "Email/Bank Only"],
+                                        ["API Integrations", "GitHub/AWS/DigitalOcean", "Email/Bank Only"],
                                         ["Usage Analysis", "Commits/Deploys", "Price Paid Only"],
                                         ["Developer Stack", "Deep (Linear/Clerk)", "Non-existent"],
                                         ["AI Personality", "Savage Insights", "Boring Reports"],
                                         ["Setup Speed", "< 2 Minutes", "Weeks of Manual Work"]
                                     ].map((row, idx) => (
                                         <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                                            <td className="p-5 font-medium">{row[0]}</td>
-                                            <td className="p-5 font-bold text-emerald-400">{row[1]}</td>
-                                            <td className="p-5 text-slate-500">{row[2]}</td>
+                                            <td className="p-3 md:p-5 font-medium text-sm md:text-base">{row[0]}</td>
+                                            <td className="p-3 md:p-5 font-bold text-emerald-400 text-sm md:text-base">{row[1]}</td>
+                                            <td className="p-3 md:p-5 text-slate-500 text-sm md:text-base">{row[2]}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -418,7 +532,7 @@ const LandingPage = () => {
                 </section>
 
                 {/* Features Grid */}
-                <section className="max-w-7xl mx-auto px-6 py-32 relative z-20">
+                <section className="max-w-7xl mx-auto px-6 py-16 md:py-24 relative z-20">
                     <div className="grid md:grid-cols-3 gap-8">
                         {[
                             {
@@ -464,8 +578,75 @@ const LandingPage = () => {
                     </div>
                 </section>
 
+                {/* Pro Features Highlight */}
+                <section className="max-w-7xl mx-auto px-6 py-16 md:py-24 relative z-20">
+                    <div className="text-center mb-12">
+                        <motion.h2
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            className="text-4xl md:text-5xl font-bold tracking-tight mb-4"
+                        >
+                            Pro Features for <span className="text-emerald-400">Power Users</span>
+                        </motion.h2>
+                        <p className="text-slate-400 text-xl">Unlock advanced capabilities with SubTrack Pro</p>
+                    </div>
+
+                    <div className="grid md:grid-cols-4 gap-6">
+                        {[
+                            {
+                                icon: Database,
+                                title: "Multi-Account Support",
+                                desc: "Connect 10+ accounts per service. Manage all your AWS, GitHub, and Vercel accounts in one place.",
+                                color: "text-amber-400",
+                                bg: "bg-amber-400/10",
+                                border: "border-amber-400/20"
+                            },
+                            {
+                                icon: MessageSquare,
+                                title: "Slack Weekly Pulse",
+                                desc: "Get AI-powered savings reports delivered to your team's Slack channel every week.",
+                                color: "text-purple-400",
+                                bg: "bg-purple-400/10",
+                                border: "border-purple-400/20"
+                            },
+                            {
+                                icon: Gift,
+                                title: "Referral Rewards",
+                                desc: "Earn free months of Pro by referring friends. They connect 3 services, you both win!",
+                                color: "text-pink-400",
+                                bg: "bg-pink-400/10",
+                                border: "border-pink-400/20"
+                            },
+                            {
+                                icon: BarChart3,
+                                title: "Historical Trends",
+                                desc: "Track your savings over time with beautiful charts. See your optimization progress.",
+                                color: "text-cyan-400",
+                                bg: "bg-cyan-400/10",
+                                border: "border-cyan-400/20"
+                            }
+                        ].map((feature, i) => (
+                            <motion.div
+                                key={i}
+                                initial={{ opacity: 0, y: 30 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                                transition={{ delay: i * 0.1, duration: 0.5 }}
+                                className={`p-6 rounded-2xl bg-slate-900/50 border ${feature.border} hover:border-opacity-60 transition-all group hover:-translate-y-1`}
+                            >
+                                <div className={`w-12 h-12 rounded-xl ${feature.bg} border ${feature.border} flex items-center justify-center mb-4 ${feature.color}`}>
+                                    <feature.icon className="w-6 h-6" />
+                                </div>
+                                <h3 className="text-xl font-bold mb-2 text-white">{feature.title}</h3>
+                                <p className="text-slate-400 text-sm leading-relaxed">{feature.desc}</p>
+                            </motion.div>
+                        ))}
+                    </div>
+                </section>
+
                 {/* CTA Section */}
-                <section className="py-32 text-center relative overflow-hidden">
+                <section className="py-16 md:py-24 text-center relative overflow-hidden z-20">
                     <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-900/10 to-transparent blur-3xl -z-10" />
                     <div className="max-w-4xl mx-auto px-6">
                         <motion.h2
@@ -490,11 +671,56 @@ const LandingPage = () => {
                             transition={{ duration: 0.6, delay: 0.2 }}
                         >
                             <Link to="/sign-up">
-                                <Button size="lg" className="h-20 px-12 text-2xl bg-white text-slate-950 hover:bg-slate-200 rounded-full font-bold shadow-2xl hover:shadow-white/20 transition-all hover:scale-105">
+                                <Button
+                                    size="lg"
+                                    className="h-20 px-12 text-2xl bg-white text-slate-950 hover:bg-slate-200 rounded-full font-bold shadow-2xl hover:shadow-white/20 transition-all hover:scale-105"
+                                    onClick={() => trackEvent('sign_up_click', { location: 'cta' })}
+                                >
                                     Get Started for Free
                                 </Button>
                             </Link>
                         </motion.div>
+                    </div>
+                </section>
+
+                {/* Natural Language FAQ Section (AEO Optimized) */}
+                <section className="max-w-4xl mx-auto px-6 py-24 border-t border-white/5 relative z-20">
+                    <div className="text-center mb-16">
+                        <h2 className="text-4xl font-bold mb-4">SaaS FAQ</h2>
+                        <p className="text-slate-400">Everything you need to know about SaaS and Cloud cost optimization.</p>
+                    </div>
+
+                    <div className="space-y-8">
+                        {[
+                            {
+                                q: "How does SubTrack detect unused AWS resources?",
+                                a: "SubTrack connects via read-only IAM credentials to scan for unattached Elastic IPs, unused EBS volumes, and dormant RDS instances that are still billing."
+                            },
+                            {
+                                q: "Is SubTrack better than using a manual spreadsheet?",
+                                a: "Yes. Unlike spreadsheets which require manual entry and become outdated instantly, SubTrack uses live API integrations to provide real-time visibility into your developer stack."
+                            },
+                            {
+                                q: "Can I track OpenAI API costs with SubTrack?",
+                                a: "Absolutely. SubTrack integrates with OpenAI to monitor your token usage and credit consumption across different projects and secondary accounts."
+                            },
+                            {
+                                q: "How much can the average startup save with SubTrack?",
+                                a: "Most startups identify between 15% and 30% in monthly savings by uncovering 'Shadow SaaS' and redundant worker processes within the first 48 hours."
+                            },
+                            {
+                                q: "Which 14+ services does SubTrack support?",
+                                a: "Currently, SubTrack supports direct API integrations with AWS, GCP, Azure, GitHub, Vercel, Linear, Sentry, Resend, Clerk, Stripe, OpenAI, DigitalOcean, Supabase, and Notion, with more being added monthly."
+                            }
+                        ].map((faq, i) => (
+                            <div key={i} className="group p-8 rounded-3xl bg-slate-900/30 border border-white/5 hover:border-emerald-500/20 transition-all">
+                                <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-3">
+                                    <MessageSquare className="w-5 h-5 text-emerald-500" />
+                                    {faq.q}
+                                </h3>
+                                <p className="text-slate-400 leading-relaxed text-sm">{faq.a}</p>
+                            </div>
+                        ))}
                     </div>
                 </section>
             </main>

@@ -1,3 +1,24 @@
+# General SEO
 User-agent: *
 Allow: /
+
+# AI Search Engine Optimization (AEO)
+# Explicitly permit AI crawlers to index our knowledge base and landing pages
+User-agent: GPTBot
+Allow: /
+Allow: /content/
+Allow: /use-cases/
+Allow: /compare/
+Allow: /docs/
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
 Sitemap: https://subtrack.pulseguard.in/sitemap.xml
+

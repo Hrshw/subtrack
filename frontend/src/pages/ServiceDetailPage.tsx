@@ -16,18 +16,28 @@ import {
     AlertTriangle,
     Zap,
     Search,
-    Filter,
     LayoutDashboard,
     HardDrive,
     Cpu,
     Layers,
     GitBranch,
-    CreditCard
+    CreditCard,
+    Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatDistanceToNow, differenceInDays, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import { calculateTotalMonthlyCost } from '../lib/costEstimator';
+import {
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer,
+    AreaChart,
+    Area
+} from 'recharts';
+import { useCurrency } from '../contexts/CurrencyContext';
 
 // --- Types ---
 interface ScanResult {
@@ -57,10 +67,12 @@ interface ServiceStats {
 const getResourceIcon = (type: string) => {
     const t = type.toLowerCase();
     if (t.includes('bucket') || t.includes('storage') || t.includes('s3')) return <Database className="w-5 h-5" />;
-    if (t.includes('instance') || t.includes('server') || t.includes('ec2')) return <Server className="w-5 h-5" />;
+    if (t.includes('instance') || t.includes('server') || t.includes('ec2') || t.includes('droplet')) return <Server className="w-5 h-5" />;
     if (t.includes('function') || t.includes('lambda')) return <Code className="w-5 h-5" />;
     if (t.includes('repo') || t.includes('git')) return <GitBranch className="w-5 h-5" />;
-    if (t.includes('db') || t.includes('rds') || t.includes('dynamo')) return <HardDrive className="w-5 h-5" />;
+    if (t.includes('db') || t.includes('rds') || t.includes('dynamo') || t.includes('supabase') || t.includes('database')) return <HardDrive className="w-5 h-5" />;
+    if (t.includes('openai') || t.includes('model') || t.includes('token')) return <Zap className="w-5 h-5" />;
+    if (t.includes('notion') || t.includes('page') || t.includes('workspace')) return <Layers className="w-5 h-5" />;
     return <Box className="w-5 h-5" />;
 };
 
@@ -71,10 +83,13 @@ const getCategoryIcon = (category: string) => {
     if (c.includes('database') || c.includes('rds')) return <HardDrive className="w-4 h-4" />;
     if (c.includes('serverless') || c.includes('lambda')) return <Zap className="w-4 h-4" />;
     if (c.includes('repo')) return <GitBranch className="w-4 h-4" />;
+    if (c.includes('project')) return <Box className="w-4 h-4" />;
+    if (c.includes('charge')) return <CreditCard className="w-4 h-4" />;
+    if (c.includes('domain')) return <Globe className="w-4 h-4" />;
     return <Layers className="w-4 h-4" />;
 };
 
-const getResourceStatusColor = (resource: any, type: string) => {
+const getResourceStatusColor = (resource: any) => {
     let daysUnused = 0;
     const dateField = resource.lastModified || resource.pushed_at || resource.launchTime || resource.createdAt;
 
@@ -103,7 +118,7 @@ const getStatusLabel = (colorClass: string) => {
 // --- Components ---
 
 const ResourceCard = ({ resource, type }: { resource: any, type: string }) => {
-    const statusColor = getResourceStatusColor(resource, type);
+    const statusColor = getResourceStatusColor(resource);
     const statusLabel = getStatusLabel(statusColor);
     const name = resource.name || resource.resourceName || 'Unknown Resource';
     const region = resource.region || 'Global';
@@ -127,7 +142,8 @@ const ResourceCard = ({ resource, type }: { resource: any, type: string }) => {
                             {name}
                         </h4>
                         <p className="text-xs opacity-70 flex items-center gap-1">
-                            <Globe className="w-3 h-3" /> {region}
+                            {resource.language ? <Code className="w-3 h-3" /> : <Globe className="w-3 h-3" />}
+                            {resource.language || region}
                         </p>
                     </div>
                 </div>
@@ -163,8 +179,10 @@ const ServiceDetailPage = () => {
     const { getToken, isLoaded, isSignedIn } = useAuth();
     const [loading, setLoading] = useState(true);
     const [scanResults, setScanResults] = useState<ScanResult[]>([]);
+    const [billingHistory, setBillingHistory] = useState<any[]>([]);
     const [activeView, setActiveView] = useState<string>('overview');
     const [searchQuery, setSearchQuery] = useState('');
+    const { formatAmount } = useCurrency();
 
     useEffect(() => {
         const fetchData = async () => {
@@ -184,7 +202,7 @@ const ServiceDetailPage = () => {
 
                 const serviceResults = response.data.filter((r: ScanResult) => {
                     const connId = typeof r.connectionId === 'object'
-                        ? (r.connectionId as any)._id
+                        ? ((r.connectionId as any)._id || (r.connectionId as any).id)
                         : r.connectionId;
                     return connId?.toLowerCase() === serviceId?.toLowerCase();
                 });
@@ -201,7 +219,7 @@ const ServiceDetailPage = () => {
     }, [serviceId, navigate, getToken, isLoaded, isSignedIn]);
 
     // Group resources by type/category
-    const { allResources, categories, serviceName } = useMemo(() => {
+    const { allResources, categories, serviceName, accountLabel } = useMemo(() => {
         let resources: any[] = [];
         let providerName = 'Service';
 
@@ -233,8 +251,35 @@ const ServiceDetailPage = () => {
         providerName = providerName.charAt(0).toUpperCase() + providerName.slice(1);
         if (providerName.toLowerCase() === 'aws') providerName = 'AWS';
 
-        return { allResources: resources, categories: cats, serviceName: providerName };
+        const accountLabel = (scanResults[0]?.connectionId as any)?.accountLabel || 'Primary Account';
+
+        return { allResources: resources, categories: cats, serviceName: providerName, accountLabel };
     }, [scanResults]);
+
+    useEffect(() => {
+        const fetchBilling = async () => {
+            if (serviceName.toLowerCase() !== 'aws' || scanResults.length === 0) return;
+
+            const firstResult = scanResults[0];
+            const connectionId = typeof firstResult.connectionId === 'object'
+                ? ((firstResult.connectionId as any)._id || (firstResult.connectionId as any).id)
+                : firstResult.connectionId;
+
+            if (!connectionId) return;
+
+            try {
+                const token = await getToken();
+                const response = await axios.get(`${getApiUrl()}/scan/billing/${connectionId}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                setBillingHistory(response.data);
+            } catch (error) {
+                console.error('Error fetching billing:', error);
+            }
+        };
+
+        fetchBilling();
+    }, [serviceName, scanResults, getToken]);
 
     const stats: ServiceStats = useMemo(() => {
         const monthlyCost = calculateTotalMonthlyCost(scanResults, serviceName);
@@ -270,88 +315,94 @@ const ServiceDetailPage = () => {
     }
 
     return (
-        <div className="flex h-screen bg-[#0a0e17] text-white font-sans overflow-hidden selection:bg-emerald-500/30">
-            {/* Sidebar */}
-            <aside className="w-64 border-r border-white/10 flex flex-col bg-[#0a0e17]">
-                <div className="p-6">
+        <div className="flex flex-col lg:flex-row h-screen bg-[#0a0e17] text-white font-sans overflow-hidden selection:bg-emerald-500/30">
+            {/* Sidebar / Mobile Header */}
+            <aside className="w-full lg:w-64 border-b lg:border-r border-white/10 flex flex-col bg-[#0a0e17] z-20">
+                <div className="p-4 lg:p-6 flex lg:flex-col items-center lg:items-start justify-between lg:justify-start gap-4 lg:gap-0">
                     <Button
                         variant="ghost"
-                        className="w-full justify-start pl-0 text-slate-400 hover:text-white hover:bg-transparent mb-6"
+                        className="hidden lg:flex w-full justify-start pl-0 text-slate-400 hover:text-white hover:bg-transparent mb-6"
                         onClick={() => navigate('/dashboard')}
                     >
                         <ArrowLeft className="w-4 h-4 mr-2" /> Back
                     </Button>
-                    <div className="flex items-center gap-3 mb-1">
-                        <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                            <Box className="w-6 h-6 text-emerald-400" />
+                    <div
+                        className="flex items-center gap-2 sm:gap-3 cursor-pointer"
+                        onClick={() => window.innerWidth < 1024 && navigate('/dashboard')}
+                    >
+                        <div className="p-1.5 sm:p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                            <Box className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400" />
                         </div>
                         <div>
-                            <h2 className="font-bold text-lg leading-none">{serviceName}</h2>
-                            <span className="text-xs text-slate-500">Connected</span>
+                            <h2 className="font-bold text-base sm:text-lg leading-none">{serviceName}</h2>
+                            <span className="text-[10px] sm:text-xs text-slate-500 truncate max-w-[80px] sm:max-w-[120px] block">{accountLabel}</span>
                         </div>
                     </div>
+                    {/* Mobile Back Button */}
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="lg:hidden text-slate-400"
+                        onClick={() => navigate('/dashboard')}
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                    </Button>
                 </div>
 
-                <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
-                    <p className="px-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 mt-4">General</p>
+                <nav className="flex lg:flex-col px-4 space-x-2 lg:space-x-0 lg:space-y-1 overflow-x-auto lg:overflow-y-auto pb-4 lg:pb-0 scrollbar-hide">
                     <button
                         onClick={() => setActiveView('overview')}
-                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeView === 'overview'
+                        className={`flex-shrink-0 lg:w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeView === 'overview'
                             ? 'bg-emerald-500/10 text-emerald-400'
                             : 'text-slate-400 hover:bg-white/5 hover:text-white'
                             }`}
                     >
-                        <LayoutDashboard className="w-4 h-4" /> Overview
+                        <LayoutDashboard className="w-4 h-4" /> <span className="hidden sm:inline lg:inline">Overview</span>
                     </button>
 
-                    <p className="px-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 mt-6">Resources</p>
                     {categories.map(category => (
                         <button
                             key={category}
                             onClick={() => setActiveView(category)}
-                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeView === category
+                            className={`flex-shrink-0 lg:w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeView === category
                                 ? 'bg-emerald-500/10 text-emerald-400'
                                 : 'text-slate-400 hover:bg-white/5 hover:text-white'
                                 }`}
                         >
                             {getCategoryIcon(category)}
-                            <span className="truncate">{category}</span>
-                            <span className="ml-auto text-xs opacity-50">
-                                {allResources.filter(r => r._category === category).length}
-                            </span>
+                            <span className="truncate max-w-[100px] sm:max-w-none">{category}</span>
                         </button>
                     ))}
 
-                    <p className="px-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 mt-6">Configuration</p>
                     <button
                         onClick={() => setActiveView('settings')}
-                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeView === 'settings'
+                        className={`flex-shrink-0 lg:w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeView === 'settings'
                             ? 'bg-emerald-500/10 text-emerald-400'
                             : 'text-slate-400 hover:bg-white/5 hover:text-white'
                             }`}
                     >
-                        <Settings className="w-4 h-4" /> Settings
+                        <Settings className="w-4 h-4" /> <span className="hidden sm:inline lg:inline">Settings</span>
                     </button>
                 </nav>
 
-                <div className="p-4 border-t border-white/10">
+                <div className="hidden lg:block p-4 border-t border-white/10">
                     <div className="bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 rounded-xl p-4 border border-emerald-500/20">
                         <p className="text-xs text-slate-400 mb-1">Potential Savings</p>
-                        <div className="text-2xl font-bold text-white">₹{stats.totalSavings.toLocaleString()}</div>
+                        <div className="text-2xl font-bold text-white">{formatAmount(stats.totalSavings)}</div>
                     </div>
                 </div>
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 overflow-y-auto bg-[#0a0e17]">
-                <div className="max-w-6xl mx-auto p-8">
+            <main className="flex-1 overflow-y-auto bg-[#0a0e17] scroll-smooth">
+                <div className="max-w-6xl mx-auto p-4 sm:p-8 pt-6 sm:pt-8">
                     {/* Header */}
                     <div className="flex items-center justify-between mb-8">
                         <div>
-                            <h1 className="text-3xl font-bold text-white mb-2">
+                            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
                                 {activeView === 'overview' ? 'Overview' : activeView === 'settings' ? 'Settings' : activeView}
                             </h1>
-                            <p className="text-slate-400">
+                            <p className="text-slate-400 text-sm sm:text-base">
                                 {activeView === 'overview'
                                     ? `High-level insights for your ${serviceName} environment.`
                                     : activeView === 'settings'
@@ -360,7 +411,7 @@ const ServiceDetailPage = () => {
                             </p>
                         </div>
                         {activeView !== 'overview' && activeView !== 'settings' && (
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                                 <div className="relative">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                                     <input
@@ -368,12 +419,9 @@ const ServiceDetailPage = () => {
                                         placeholder="Search..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="bg-white/5 border border-white/10 rounded-lg pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 w-64"
+                                        className="bg-white/5 border border-white/10 rounded-lg pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50 w-full sm:w-64"
                                     />
                                 </div>
-                                <Button variant="outline" size="icon">
-                                    <Filter className="w-4 h-4" />
-                                </Button>
                             </div>
                         )}
                     </div>
@@ -388,23 +436,98 @@ const ServiceDetailPage = () => {
                                 className="space-y-8"
                             >
                                 {/* Stats Grid */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                                     <div className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
                                         <div className="flex items-center gap-3 mb-4 text-slate-400">
-                                            <Server className="w-5 h-5" />
-                                            <span className="text-sm font-medium">Total Resources</span>
-                                        </div>
-                                        <div className="text-3xl font-bold text-white">{stats.totalResources}</div>
-                                    </div>
-                                    <div className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
-                                        <div className="flex items-center gap-3 mb-4 text-slate-400">
-                                            <CreditCard className="w-5 h-5" />
-                                            <span className="text-sm font-medium">Est. Monthly Spend</span>
+                                            {serviceName === 'GitHub' ? <GitBranch className="w-5 h-5 text-emerald-400" /> :
+                                                serviceName === 'Vercel' ? <Box className="w-5 h-5 text-emerald-400" /> :
+                                                    serviceName === 'OpenAI' ? <Zap className="w-5 h-5 text-emerald-400" /> :
+                                                        serviceName === 'DigitalOcean' ? <Server className="w-5 h-5 text-emerald-400" /> :
+                                                            serviceName === 'Supabase' ? <Database className="w-5 h-5 text-emerald-400" /> :
+                                                                serviceName === 'Notion' ? <Database className="w-5 h-5 text-emerald-400" /> :
+                                                                    <Server className="w-5 h-5" />}
+                                            <span className="text-sm font-medium">
+                                                {serviceName === 'GitHub' ? 'Total Repos' :
+                                                    serviceName === 'Vercel' ? 'Total Projects' :
+                                                        serviceName === 'Stripe' ? 'Recent Charges' :
+                                                            serviceName === 'OpenAI' ? 'Total Tokens' :
+                                                                serviceName === 'DigitalOcean' ? 'Total Droplets' :
+                                                                    serviceName === 'Supabase' ? 'Total Projects' :
+                                                                        serviceName === 'Notion' ? 'Total Members' :
+                                                                            'Total Resources'}
+                                            </span>
                                         </div>
                                         <div className="text-3xl font-bold text-white">
-                                            ₹{(stats.monthlyCost || 0).toLocaleString()}
+                                            {serviceName === 'Stripe' ? (scanResults[0]?.rawData?.chargesVolume || '0') :
+                                                serviceName === 'OpenAI' ? (scanResults[0]?.rawData?.totalTokens?.toLocaleString() || '0') :
+                                                    serviceName === 'DigitalOcean' ? (scanResults[0]?.rawData?.droplets?.length || '0') :
+                                                        serviceName === 'Supabase' ? (scanResults[0]?.rawData?.projectCount || '0') :
+                                                            serviceName === 'Notion' ? (scanResults[0]?.rawData?.memberCount || '0') :
+                                                                stats.totalResources}
                                         </div>
                                     </div>
+
+                                    <div className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
+                                        <div className="flex items-center gap-3 mb-4 text-slate-400">
+                                            {serviceName === 'GitHub' ? <GitBranch className="w-5 h-5 text-cyan-400" /> :
+                                                serviceName === 'Vercel' ? <Zap className="w-5 h-5 text-cyan-400" /> :
+                                                    serviceName === 'Sentry' ? <Globe className="w-5 h-5 text-cyan-400" /> :
+                                                        serviceName === 'Stripe' ? <Globe className="w-5 h-5 text-cyan-400" /> :
+                                                            serviceName === 'OpenAI' ? <Zap className="w-5 h-5 text-cyan-400" /> :
+                                                                serviceName === 'DigitalOcean' ? <Cpu className="w-5 h-5 text-cyan-400" /> :
+                                                                    serviceName === 'Supabase' ? <Zap className="w-5 h-5 text-cyan-400" /> :
+                                                                        serviceName === 'Notion' ? <Layers className="w-5 h-5 text-cyan-400" /> :
+                                                                            <Globe className="w-5 h-5 text-cyan-400" />}
+                                            <span className="text-sm font-medium">
+                                                {serviceName === 'GitHub' ? 'Active Languages' :
+                                                    serviceName === 'Vercel' ? 'Active Frameworks' :
+                                                        serviceName === 'Sentry' ? 'Active Platforms' :
+                                                            serviceName === 'Stripe' ? 'Recent Charges' :
+                                                                serviceName === 'OpenAI' ? 'Top Model' :
+                                                                    serviceName === 'DigitalOcean' ? 'Account Balance' :
+                                                                        serviceName === 'Supabase' ? 'Service Plan' :
+                                                                            serviceName === 'Notion' ? 'Databases' :
+                                                                                'Active Regions'}
+                                            </span>
+                                        </div>
+                                        <div className="text-3xl font-bold text-white">
+                                            {serviceName === 'Vercel' ? (new Set(allResources.map(r => r.framework).filter(Boolean)).size || '0') :
+                                                serviceName === 'Sentry' ? (new Set(allResources.map(r => r.platform).filter(Boolean)).size || '0') :
+                                                    serviceName === 'Stripe' ? (scanResults[0]?.rawData?.chargesVolume || '0') :
+                                                        serviceName === 'GitHub' ? (new Set(allResources.map(r => r.language).filter(Boolean)).size || '0') :
+                                                            serviceName === 'OpenAI' ? (
+                                                                Object.entries(scanResults[0]?.rawData?.usageByModel || {})
+                                                                    .sort((a: any, b: any) => b[1] - a[1])[0]?.[0] || 'GPT-4o'
+                                                            ) :
+                                                                serviceName === 'DigitalOcean' ? `$${scanResults[0]?.rawData?.accountBalance || '0'}` :
+                                                                    serviceName === 'Supabase' ? (scanResults[0]?.rawData?.plan || 'Free') :
+                                                                        serviceName === 'Notion' ? (scanResults[0]?.rawData?.databaseCount || '0') :
+                                                                            stats.activeRegions}
+                                        </div>
+                                    </div>
+
+                                    <div className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
+                                        <div className="flex items-center justify-between mb-4 text-slate-400">
+                                            <div className="flex items-center gap-3">
+                                                <CreditCard className="w-5 h-5" />
+                                                <span className="text-sm font-medium">{serviceName === 'OpenAI' || serviceName === 'DigitalOcean' ? 'MTD Usage' : 'Est. Monthly Spend'}</span>
+                                            </div>
+                                            <div className="group relative">
+                                                <Info className="w-4 h-4 cursor-help text-slate-500 hover:text-slate-300 transition-colors" />
+                                                <div className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-slate-800 border border-white/10 rounded-lg text-[10px] text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
+                                                    Costs are estimated based on public pricing and current resource configurations. Actual billing may vary.
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-baseline gap-2">
+                                            <span className="text-3xl font-bold text-white">
+                                                {serviceName === 'DigitalOcean' ? `$${scanResults[0]?.rawData?.monthToDateUsage || '0'}` :
+                                                    formatAmount(stats.monthlyCost || 0)}
+                                            </span>
+                                            <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">{serviceName === 'DigitalOcean' ? 'Billed' : 'Estimated'}</span>
+                                        </div>
+                                    </div>
+
                                     <div className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
                                         <div className="flex items-center gap-3 mb-4 text-slate-400">
                                             <AlertTriangle className="w-5 h-5 text-amber-400" />
@@ -413,6 +536,65 @@ const ServiceDetailPage = () => {
                                         <div className="text-3xl font-bold text-white">{stats.zombieCount}</div>
                                     </div>
                                 </div>
+
+                                {/* Billing History (AWS Only) */}
+                                {serviceName === 'AWS' && billingHistory.length > 0 && (
+                                    <div className="p-8 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-sm">
+                                        <div className="flex items-center justify-between mb-8">
+                                            <div>
+                                                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                                    <CreditCard className="w-5 h-5 text-emerald-400" />
+                                                    Actual Billing History
+                                                </h3>
+                                                <p className="text-sm text-slate-400 mt-1">Directly from AWS Cost Explorer API</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <span className="text-xs text-slate-500 uppercase font-bold tracking-widest">Last 6 Months</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="h-[300px] w-full">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <AreaChart data={billingHistory}>
+                                                    <defs>
+                                                        <linearGradient id="colorCost" x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                                                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                                        </linearGradient>
+                                                    </defs>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
+                                                    <XAxis
+                                                        dataKey="billingPeriod"
+                                                        stroke="#64748b"
+                                                        fontSize={12}
+                                                        tickLine={false}
+                                                        axisLine={false}
+                                                    />
+                                                    <YAxis
+                                                        stroke="#64748b"
+                                                        fontSize={12}
+                                                        tickLine={false}
+                                                        axisLine={false}
+                                                        tickFormatter={(value) => `$${value}`}
+                                                    />
+                                                    <Tooltip
+                                                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#ffffff10', borderRadius: '12px' }}
+                                                        itemStyle={{ color: '#10b981' }}
+                                                        formatter={(value: any) => [`$${parseFloat(value).toFixed(2)}`, 'Total Cost']}
+                                                    />
+                                                    <Area
+                                                        type="monotone"
+                                                        dataKey="totalCost"
+                                                        stroke="#10b981"
+                                                        fillOpacity={1}
+                                                        fill="url(#colorCost)"
+                                                        strokeWidth={3}
+                                                    />
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Top Savings */}
                                 <div className="p-8 rounded-3xl bg-gradient-to-br from-slate-900 to-slate-900/50 border border-white/10">
@@ -428,7 +610,7 @@ const ServiceDetailPage = () => {
                                                     <p className="text-xs text-slate-400">{result.resourceType}</p>
                                                 </div>
                                                 <div className="text-right">
-                                                    <div className="text-emerald-400 font-bold">₹{result.potentialSavings}</div>
+                                                    <div className="text-emerald-400 font-bold">{formatAmount(result.potentialSavings)}</div>
                                                     <div className="text-[10px] text-slate-500">potential savings</div>
                                                 </div>
                                             </div>

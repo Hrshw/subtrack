@@ -30,7 +30,7 @@ const DocsPricing = () => {
                         <ul className="space-y-4 mb-8">
                             <li className="flex items-center gap-3 text-slate-300">
                                 <Check className="w-5 h-5 text-emerald-400" />
-                                Up to 3 connected services
+                                Up to 5 connected services
                             </li>
                             <li className="flex items-center gap-3 text-slate-300">
                                 <Check className="w-5 h-5 text-emerald-400" />
@@ -38,7 +38,7 @@ const DocsPricing = () => {
                             </li>
                             <li className="flex items-center gap-3 text-slate-300">
                                 <Check className="w-5 h-5 text-emerald-400" />
-                                Basic savings report
+                                Basic savings report (S3 & Repos)
                             </li>
                             <li className="flex items-center gap-3 text-slate-500">
                                 <X className="w-5 h-5" />
@@ -58,21 +58,20 @@ const DocsPricing = () => {
                         </div>
 
                         <h3 className="text-2xl font-bold text-white mb-2">Pro</h3>
-                        <div className="text-4xl font-bold text-white mb-6">₹799<span className="text-lg text-slate-500 font-normal">/mo</span></div>
+                        <div className="text-4xl font-bold text-white mb-6">$9<span className="text-lg text-slate-500 font-normal">/mo</span></div>
                         <p className="text-emerald-400 mb-8">Save ₹80,000+/year on average.</p>
-
                         <ul className="space-y-4 mb-8">
                             <li className="flex items-center gap-3 text-white">
                                 <Check className="w-5 h-5 text-emerald-400" />
-                                Unlimited connections
+                                Multi-Account Support
                             </li>
                             <li className="flex items-center gap-3 text-white">
                                 <Check className="w-5 h-5 text-emerald-400" />
-                                Weekly auto-scans & alerts
+                                Deep Cloud Scan (AWS, GCP, Azure)
                             </li>
                             <li className="flex items-center gap-3 text-white">
                                 <Check className="w-5 h-5 text-emerald-400" />
-                                Advanced savings insights
+                                14+ Integrations
                             </li>
                             <li className="flex items-center gap-3 text-white">
                                 <Check className="w-5 h-5 text-emerald-400" />
@@ -81,10 +80,10 @@ const DocsPricing = () => {
                         </ul>
 
                         <Button
-                            onClick={() => setShowWaitlist(true)}
+                            onClick={() => window.location.href = '/checkout'}
                             className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold shadow-lg shadow-emerald-500/20"
                         >
-                            Join Waitlist
+                            Upgrade Now
                         </Button>
                     </div>
                 </div>

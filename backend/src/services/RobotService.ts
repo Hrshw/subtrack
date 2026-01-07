@@ -84,6 +84,25 @@ export class RobotService {
             const hasLeaks = leaks.length > 0;
             const allHealthy = totalServices > 0 && healthyServices.length === totalServices && !hasLeaks;
 
+            const userCurrency = (user?.currency || 'USD') as string;
+            const configs: Record<string, { symbol: string; rate: number }> = {
+                USD: { symbol: '$', rate: 1 / 85 },
+                INR: { symbol: '₹', rate: 1 },
+                EUR: { symbol: '€', rate: 0.011 },
+                GBP: { symbol: '£', rate: 0.0093 },
+                AUD: { symbol: 'A$', rate: 0.018 },
+                CAD: { symbol: 'C$', rate: 0.016 },
+                SGD: { symbol: 'S$', rate: 0.016 },
+                AED: { symbol: 'د.إ', rate: 0.043 }
+            };
+            const currencyConfig = configs[userCurrency] || configs.USD;
+
+            const displaySavings = totalSavings * currencyConfig.rate;
+            const formattedSavings = `${currencyConfig.symbol}${displaySavings.toLocaleString(undefined, {
+                minimumFractionDigits: (displaySavings % 1 !== 0) ? 2 : 0,
+                maximumFractionDigits: 2
+            })}`;
+
             // Generate context-aware AI message
             let prompt: string;
 
@@ -95,7 +114,7 @@ Output ONLY the message, nothing else.
 Example output: "Zero waste detected, you're literally perfect yaar!"`;
             } else if (hasLeaks) {
                 prompt = `You are a friendly robot mascot for a subscription tracker app (NOT a financial service).
-Your job: Create a playful nudge about ${leaks.length} unused/zombie subscriptions totaling ₹${totalSavings.toLocaleString('en-IN')}.
+Your job: Create a playful nudge about ${leaks.length} unused/zombie subscriptions totaling ${formattedSavings}.
 Requirements: MAX 12 words. Use casual Indian-English (bro, yaar). Be cheeky but helpful.
 Output ONLY the message, nothing else.
 Example output: "Found ${leaks.length} sleeping apps — time to wake up bro!"`;
@@ -139,6 +158,18 @@ Example output: "I'm your app-tracking buddy, click to explore!"`;
         } catch (error) {
             console.error('❌ Robot speech generation failed:', error);
             return this.getTimeBasedGreeting();
+        }
+    }
+
+    /**
+     * Clear robot speech cache (used after a fresh scan)
+     */
+    static async clearCache(userId: string): Promise<void> {
+        try {
+            await RobotChatCache.deleteOne({ userId });
+            console.log(`🗑️  Cleared robot speech cache for user ${userId}`);
+        } catch (error) {
+            console.error('Failed to clear robot cache:', error);
         }
     }
 
@@ -187,12 +218,29 @@ Example output: "I'm your app-tracking buddy, click to explore!"`;
             const scanResults = await ScanResult.find({ userId }).sort({ createdAt: -1 }).limit(20);
             const leaks = scanResults.filter(r => r.status === 'zombie' || r.status === 'downgrade_possible' || r.status === 'unused');
             const healthyServices = scanResults.filter(r => r.status === 'active');
+            // Handle currency localization
+            const userCurrency = (user?.currency || 'USD') as string;
+            const configs: Record<string, { symbol: string; rate: number }> = {
+                USD: { symbol: '$', rate: 1 / 85 },
+                INR: { symbol: '₹', rate: 1 },
+                EUR: { symbol: '€', rate: 0.011 },
+                GBP: { symbol: '£', rate: 0.0093 },
+                AUD: { symbol: 'A$', rate: 0.018 },
+                CAD: { symbol: 'C$', rate: 0.016 },
+                SGD: { symbol: 'S$', rate: 0.016 },
+                AED: { symbol: 'د.إ', rate: 0.043 }
+            };
+            const currencyConfig = configs[userCurrency] || configs.USD;
+
             const totalSavings = leaks.reduce((sum, l) => sum + (l.potentialSavings || 0), 0);
+            const displaySavingsTotal = totalSavings * currencyConfig.rate;
+            const formattedTotalSavings = `${currencyConfig.symbol}${displaySavingsTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
             // Build detailed context from ACTUAL scan data
             const leakDetails = leaks.map(l => {
-                const rawData = l.rawData || {};
-                return `${l.resourceName} (${l.resourceType || 'service'}, ₹${l.potentialSavings}/mo, reason: ${l.reason || 'unused'})`;
+                const savings = (l.potentialSavings || 0) * currencyConfig.rate;
+                const formattedSavings = `${currencyConfig.symbol}${savings.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+                return `${l.resourceName} (${l.resourceType || 'service'}, ${formattedSavings}/mo, reason: ${l.reason || 'unused'})`;
             }).join('; ');
 
             const healthyDetails = healthyServices.slice(0, 5).map(s => s.resourceName).join(', ');
@@ -204,9 +252,11 @@ Example output: "I'm your app-tracking buddy, click to explore!"`;
             );
 
             const specificContext = relevantResources.length > 0
-                ? `\nRelevant resources found: ${relevantResources.map(r =>
-                    `${r.resourceName} (type: ${r.resourceType}, status: ${r.status}, savings: ₹${r.potentialSavings}, raw: ${JSON.stringify(r.rawData || {}).substring(0, 200)})`
-                ).join('; ')}`
+                ? `\nRelevant resources found: ${relevantResources.map(r => {
+                    const savings = (r.potentialSavings || 0) * currencyConfig.rate;
+                    const formatted = `${currencyConfig.symbol}${savings.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+                    return `${r.resourceName} (type: ${r.resourceType}, status: ${r.status}, savings: ${formatted}, raw: ${JSON.stringify(r.rawData || {}).substring(0, 200)})`;
+                }).join('; ')}`
                 : '';
 
             const prompt = `You are SubTrack's AI assistant helping ${userName} manage their dev tool subscriptions.
@@ -214,7 +264,7 @@ Example output: "I'm your app-tracking buddy, click to explore!"`;
 === USER'S ACTUAL DATA ===
 User Name: ${userName}
 User Tier: ${isPro ? 'Pro' : 'Free'}
-Total Leaks Found: ${leaks.length} (potential savings: ₹${totalSavings.toLocaleString('en-IN')}/month)
+Total Leaks Found: ${leaks.length} (potential savings: ${formattedTotalSavings}/month)
 Healthy Services: ${healthyServices.length} (${healthyDetails || 'none yet'})
 Leak Details: ${leakDetails || 'No leaks detected'}
 ${specificContext}
@@ -227,6 +277,7 @@ IMPORTANT:
 - If user asks about something not in their data, say "I don't see that in your connected services."
 - Be helpful, direct, and use casual Indian-English (bro, yaar).
 - Keep response to 2-3 sentences max.
+- Always refer to costs in ${userCurrency} (${currencyConfig.symbol}).
 ${!isPro ? `- User has ${remainingMessages - 1} messages left today.` : ''}`;
 
             const response = await this.generateWithOpenRouter(prompt, {
@@ -368,7 +419,7 @@ ${!isPro ? `- User has ${remainingMessages - 1} messages left today.` : ''}`;
                 : "Work's done? Not until we fix these subscriptions! 🛑";
         } else {
             return random > 0.5
-                ? "Still up grinding? Let's find that wasted ₹47k while the world sleeps 😈"
+                ? "Still up grinding? Let's find those wasted leaks while the world sleeps 😈"
                 : "Late night coding? Don't let your servers burn money all night 🌙";
         }
     }

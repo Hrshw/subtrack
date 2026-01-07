@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PayUService = void 0;
 const crypto_1 = __importDefault(require("crypto"));
 const User_1 = require("../models/User");
+const Transaction_1 = require("../models/Transaction");
 const PAYU_URL = process.env.PAYU_URL || 'https://secure.payu.in';
 const PAYU_MERCHANT_KEY = process.env.PAYU_MERCHANT_KEY || '';
 const PAYU_SALT = process.env.PAYU_SALT || '';
@@ -59,7 +60,16 @@ class PayUService {
                 const hash = crypto_1.default.createHash('sha512').update(hashString).digest('hex');
                 console.log(`💳 PayU session created for user ${userId}`);
                 console.log(`   Amount: ₹${amount}, Plan: ${plan}, TxnID: ${txnid}`);
-                return Object.assign(Object.assign({}, paymentData), { hash, payuUrl: `${PAYU_URL}/_payment` });
+                const sessionData = Object.assign(Object.assign({}, paymentData), { hash, payuUrl: `${PAYU_URL}/_payment` });
+                // Log initial pending transaction
+                yield Transaction_1.Transaction.create({
+                    userId,
+                    txnid,
+                    amount: Number(amount),
+                    plan,
+                    status: 'pending'
+                });
+                return sessionData;
             }
             catch (error) {
                 console.error('PayU session creation failed:', error);
@@ -115,13 +125,36 @@ class PayUService {
                 }
                 console.log(`🎉 User ${userId} upgraded to Pro!`);
                 console.log(`   Plan: ${plan}, Amount: ₹${amount}, TxnID: ${txnid}`);
-                // TODO: Send confirmation email
-                // TODO: Log transaction in database
+                // Log transaction in database
+                yield Transaction_1.Transaction.findOneAndUpdate({ txnid }, {
+                    status: 'success',
+                    rawResponse: responseData
+                }, { upsert: true });
                 return user;
             }
             catch (error) {
                 console.error('Failed to handle successful payment:', error);
                 throw error;
+            }
+        });
+    }
+    /**
+     * Handle failed payment
+     * Log failure reason
+     */
+    static handleFailedPayment(responseData) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const { txnid, error_Message, unmappedstatus } = responseData;
+                yield Transaction_1.Transaction.findOneAndUpdate({ txnid }, {
+                    status: 'failure',
+                    errorMessage: error_Message || unmappedstatus || 'Payment failed',
+                    rawResponse: responseData
+                }, { upsert: true });
+                console.log(`❌ Transaction ${txnid} marked as failure: ${error_Message}`);
+            }
+            catch (error) {
+                console.error('Failed to log payment failure:', error);
             }
         });
     }

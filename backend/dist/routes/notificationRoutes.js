@@ -65,15 +65,26 @@ router.post('/test-email', (req, res) => __awaiter(void 0, void 0, void 0, funct
         // @ts-ignore
         const clerkId = req.auth.userId;
         const { type } = req.body; // 'digest' or 'alert'
-        const user = yield User_1.User.findOne({ clerkId });
-        if (!user || !user.email) {
-            return res.status(404).json({ message: 'User email not found' });
+        let user = yield User_1.User.findOne({ clerkId });
+        if (!user) {
+            user = yield User_1.User.create({
+                clerkId,
+                email: `${clerkId}@temp.clerk`,
+                name: 'User'
+            });
+            console.log(`Auto-created user for notification test: ${clerkId}`);
+        }
+        if (!user.email) {
+            return res.status(400).json({ message: 'User email not found' });
         }
         if (type === 'digest') {
             yield EmailService_1.EmailService.sendMonthlyDigest(user.email, 12500, [
                 { resourceName: 'GitHub Copilot', reason: 'Inactive for 45 days', potentialSavings: 800 },
                 { resourceName: 'Vercel Pro', reason: 'Underutilized limits', potentialSavings: 1600 }
             ]);
+        }
+        else if (type === 'welcome') {
+            yield EmailService_1.EmailService.sendWelcomeEmail(user.email, user.name || 'Developer');
         }
         else {
             yield EmailService_1.EmailService.sendLeakAlert(user.email, 'AWS RDS Instance', 4500, 'Idle DB instance detected');

@@ -1,5 +1,6 @@
 import express from 'express';
 import { Waitlist } from '../models/Waitlist';
+import { EmailService } from '../services/EmailService';
 
 const router = express.Router();
 
@@ -32,6 +33,11 @@ router.post('/join', async (req, res) => {
         });
 
         console.log(`✅ User ${clerkId} joined waitlist at position #${position}`);
+
+        // Send confirmation email
+        if (email) {
+            await EmailService.sendWaitlistEmail(email, position);
+        }
 
         res.json({
             message: 'Successfully joined waitlist',

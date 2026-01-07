@@ -42,6 +42,7 @@ const DocsGettingStarted = () => {
                             <li><strong>GitHub:</strong> We scan for inactive seats and unused Copilot licenses.</li>
                             <li><strong>Vercel:</strong> We check for over-provisioned resources and idle projects.</li>
                             <li><strong>AWS:</strong> We look for idle EC2 instances and unattached EBS volumes.</li>
+                            <li><strong>OpenAI:</strong> We monitor token usage and identify inefficient model choices.</li>
                         </ul>
                     </section>
 

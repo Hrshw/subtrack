@@ -112,6 +112,7 @@ const getAuthorizeUrl = (req, res) => __awaiter(void 0, void 0, void 0, function
         const state = Buffer.from(JSON.stringify({
             userId,
             provider: providerLower,
+            label: req.query.label, // Pass the optional label through OAuth state
             timestamp: Date.now()
         })).toString('base64');
         let authUrl;
@@ -169,7 +170,7 @@ const handleCallback = (req, res) => __awaiter(void 0, void 0, void 0, function*
         }
         // Verify state parameter
         const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
-        const { userId, provider: stateProvider, timestamp } = stateData;
+        const { userId, provider: stateProvider, timestamp, label } = stateData;
         // Check if state is expired (10 minutes)
         if (Date.now() - timestamp > 10 * 60 * 1000) {
             return res.redirect(`${frontendUrl}/dashboard?error=state_expired`);
@@ -238,28 +239,15 @@ const handleCallback = (req, res) => __awaiter(void 0, void 0, void 0, function*
         }
         // Encrypt and save token
         const encryptedToken = (0, encryption_1.encryptToken)(accessToken);
-        // Check if connection already exists
-        const existingConnection = yield Connection_1.Connection.findOne({
+        // Create new connection (Allow multiple for the same provider)
+        yield Connection_1.Connection.create({
             userId: user._id,
-            provider: providerLower
+            provider: providerLower,
+            encryptedToken,
+            accountLabel: label || undefined,
+            status: 'active',
+            metadata: { type: 'oauth', connectedAt: new Date() }
         });
-        if (existingConnection) {
-            // Update existing connection
-            existingConnection.encryptedToken = encryptedToken;
-            existingConnection.status = 'active';
-            existingConnection.metadata = { type: 'oauth', connectedAt: new Date() };
-            yield existingConnection.save();
-        }
-        else {
-            // Create new connection
-            yield Connection_1.Connection.create({
-                userId: user._id,
-                provider: providerLower,
-                encryptedToken,
-                status: 'active',
-                metadata: { type: 'oauth', connectedAt: new Date() }
-            });
-        }
         // Redirect to frontend dashboard with success
         res.redirect(`${frontendUrl}/dashboard?connected=${providerLower}`);
     }
@@ -304,28 +292,15 @@ const saveApiKeyConnection = (req, res) => __awaiter(void 0, void 0, void 0, fun
         }
         // Encrypt and save the API key
         const encryptedToken = (0, encryption_1.encryptToken)(apiKey);
-        // Check if connection already exists
-        const existingConnection = yield Connection_1.Connection.findOne({
+        // Always create new connection for API keys too if label is provided or if it's the first one
+        yield Connection_1.Connection.create({
             userId: user._id,
-            provider: providerLower
+            provider: providerLower,
+            encryptedToken,
+            accountLabel: req.body.accountLabel || undefined,
+            status: 'active',
+            metadata: { type: 'api_key', connectedAt: new Date() }
         });
-        if (existingConnection) {
-            // Update existing connection
-            existingConnection.encryptedToken = encryptedToken;
-            existingConnection.status = 'active';
-            existingConnection.metadata = { type: 'api_key', connectedAt: new Date() };
-            yield existingConnection.save();
-        }
-        else {
-            // Create new connection
-            yield Connection_1.Connection.create({
-                userId: user._id,
-                provider: providerLower,
-                encryptedToken,
-                status: 'active',
-                metadata: { type: 'api_key', connectedAt: new Date() }
-            });
-        }
         console.log(`✅ API key connection saved for ${provider}`);
         res.json({ success: true, message: `${provider} connected successfully` });
     }

@@ -13,6 +13,9 @@ exports.RuleEngine = void 0;
 const ScanResult_1 = require("../models/ScanResult");
 const gemini_1 = require("../utils/gemini");
 const User_1 = require("../models/User");
+const BillingSummary_1 = require("../models/BillingSummary");
+const AnalyticsService_1 = require("./AnalyticsService");
+const ReferralService_1 = require("./ReferralService");
 // USD to INR conversion (rough estimate)
 const USD_TO_INR = 85;
 // Plan pricing (monthly, in USD)
@@ -52,11 +55,25 @@ const PLAN_COSTS = {
         standard: 0, // Pay per transaction
         starter: 0,
         custom: 0
+    },
+    digitalocean: {
+        'usage-based': 0
+    },
+    supabase: {
+        free: 0,
+        pro: 25
+    },
+    notion: {
+        free: 0,
+        plus: 10,
+        business: 18,
+        team: 10 // Legacy name or internal simplification
     }
 };
 class RuleEngine {
     static analyze(userId, connectionId, provider, data, userTierArg) {
         return __awaiter(this, void 0, void 0, function* () {
+            var _a, _b, _c, _d, _e;
             let userTier = userTierArg;
             if (!userTier) {
                 try {
@@ -196,7 +213,7 @@ class RuleEngine {
                                 resourceName: `${stoppedInstances.length} Stopped EC2 Instances`,
                                 resourceType: 'compute',
                                 status: 'zombie',
-                                potentialSavings: stoppedInstances.length * 8 * USD_TO_INR,
+                                potentialSavings: stoppedInstances.length * 5.5 * USD_TO_INR,
                                 currency: 'INR',
                                 reason: `${stoppedInstances.length} EC2 instances are stopped but still incurring EBS storage costs`,
                                 rawData: { count: stoppedInstances.length, instances: stoppedInstances },
@@ -555,6 +572,164 @@ class RuleEngine {
                         issue: 'none'
                     });
                     break;
+                case 'openai':
+                    const usage = (data.usageByModel || {});
+                    let totalCost = 0;
+                    const pricing = {
+                        'gpt-4o': 10,
+                        'gpt-4o-mini': 0.3,
+                        'gpt-4-turbo': 20,
+                        'gpt-4': 45,
+                        'gpt-3.5-turbo': 1
+                    };
+                    Object.entries(usage).forEach(([model, tokens]) => {
+                        const costPer1M = pricing[model] || pricing['gpt-4o'];
+                        const cost = (tokens / 1000000) * costPer1M;
+                        totalCost += cost;
+                        if ((model.includes('gpt-4') && !model.includes('4o')) && tokens > 100000) {
+                            results.push({
+                                resourceName: model,
+                                resourceType: 'OpenAI Model Usage',
+                                status: 'downgrade_possible',
+                                potentialSavings: Math.round(cost * 0.7 * USD_TO_INR),
+                                currency: 'INR',
+                                reason: `High usage of expensive model: ${model}`,
+                                smartRecommendation: `Switch to gpt-4o-mini or gpt-4o. It's significantly cheaper for most tasks.`,
+                                rawData: { tokens, model },
+                                issue: 'high_cost_model'
+                            });
+                        }
+                    });
+                    if (results.length === 0) {
+                        results.push({
+                            resourceName: 'OpenAI API Usage',
+                            resourceType: 'Account',
+                            status: 'active',
+                            potentialSavings: 0,
+                            currency: 'INR',
+                            reason: 'Usage within normal bounds.',
+                            rawData: { totalTokens: data.totalTokens },
+                            issue: 'none'
+                        });
+                    }
+                    break;
+                case 'digitalocean':
+                    const droplets = data.droplets || [];
+                    const monthToDateUsage = data.monthToDateUsage || 0;
+                    if (droplets.length === 0) {
+                        results.push({
+                            resourceName: 'DigitalOcean Account',
+                            resourceType: 'account',
+                            status: 'zombie',
+                            potentialSavings: Math.round(monthToDateUsage * USD_TO_INR),
+                            currency: 'INR',
+                            reason: 'No active droplets found. Review if account is needed.',
+                            rawData: { monthToDateUsage },
+                            issue: 'no_resources'
+                        });
+                    }
+                    else {
+                        // Check for stopped droplets
+                        const stoppedDroplets = droplets.filter((d) => d.status === 'off');
+                        for (const droplet of stoppedDroplets) {
+                            results.push({
+                                resourceName: droplet.name || `Droplet ${droplet.id}`,
+                                resourceType: 'droplet',
+                                status: 'zombie',
+                                potentialSavings: Math.round(5 * USD_TO_INR), // Estimate $5/month for small droplet
+                                currency: 'INR',
+                                reason: 'Droplet is powered off but still incurring storage costs.',
+                                rawData: droplet,
+                                issue: 'stopped_instance'
+                            });
+                        }
+                        if (stoppedDroplets.length === 0) {
+                            results.push({
+                                resourceName: `DigitalOcean (${droplets.length} droplets)`,
+                                resourceType: 'account',
+                                status: 'active',
+                                potentialSavings: 0,
+                                currency: 'INR',
+                                reason: 'All droplets are running.',
+                                rawData: { dropletCount: droplets.length, monthToDateUsage },
+                                issue: 'none'
+                            });
+                        }
+                    }
+                    break;
+                case 'supabase':
+                    const projects = data.projects || [];
+                    const projectCount = projects.length;
+                    if (projectCount === 0) {
+                        results.push({
+                            resourceName: 'Supabase Account',
+                            resourceType: 'account',
+                            status: 'zombie',
+                            potentialSavings: Math.round(25 * USD_TO_INR), // Pro plan cost
+                            currency: 'INR',
+                            reason: 'No active projects found.',
+                            rawData: {},
+                            issue: 'no_resources'
+                        });
+                    }
+                    else {
+                        // Check for paused projects
+                        const pausedProjects = projects.filter((p) => p.status === 'INACTIVE_PAUSED');
+                        for (const proj of pausedProjects) {
+                            results.push({
+                                resourceName: proj.name || `Project ${proj.id}`,
+                                resourceType: 'project',
+                                status: 'zombie',
+                                potentialSavings: Math.round(25 * USD_TO_INR),
+                                currency: 'INR',
+                                reason: 'Project is paused. Consider deleting if unused.',
+                                rawData: proj,
+                                issue: 'paused_project'
+                            });
+                        }
+                        if (pausedProjects.length === 0) {
+                            results.push({
+                                resourceName: `Supabase (${projectCount} projects)`,
+                                resourceType: 'account',
+                                status: 'active',
+                                potentialSavings: 0,
+                                currency: 'INR',
+                                reason: 'All projects are active.',
+                                rawData: { projectCount },
+                                issue: 'none'
+                            });
+                        }
+                    }
+                    break;
+                case 'notion':
+                    const memberCount = data.memberCount || 1;
+                    const databaseCount = data.databaseCount || 0;
+                    // Notion billing is per member
+                    if (memberCount > 10 && databaseCount < 5) {
+                        results.push({
+                            resourceName: 'Notion Workspace',
+                            resourceType: 'workspace',
+                            status: 'downgrade_possible',
+                            potentialSavings: Math.round((memberCount - 5) * 10 * USD_TO_INR), // $10/member on Team plan
+                            currency: 'INR',
+                            reason: `${memberCount} members but only ${databaseCount} databases. Consider reviewing member access.`,
+                            rawData: { memberCount, databaseCount },
+                            issue: 'overprovisioned'
+                        });
+                    }
+                    else {
+                        results.push({
+                            resourceName: `Notion (${memberCount} members)`,
+                            resourceType: 'workspace',
+                            status: 'active',
+                            potentialSavings: 0,
+                            currency: 'INR',
+                            reason: 'Usage appears appropriate for member count.',
+                            rawData: { memberCount, databaseCount },
+                            issue: 'none'
+                        });
+                    }
+                    break;
             }
             // Save results to DB with AI-generated recommendations
             // CRITICAL: Only save if there are actual findings
@@ -596,8 +771,102 @@ class RuleEngine {
                     reason: result.reason,
                     smartRecommendation,
                     usesFallback,
+                    isEstimated: true, // Currently all costs are based on heuristics/public prices
                     rawData: result.rawData
                 });
+            }
+            // --- NEW: Save Monthly Spend to BillingSummary (Dynamic for all providers) ---
+            const currentPeriod = new Date().toISOString().substring(0, 7); // "YYYY-MM"
+            let currentTotalCost = 0;
+            let costBreakdown = {};
+            if (provider === 'openai') {
+                // Calculate OpenAI cost from usage data
+                const usage = (data.usageByModel || {});
+                const pricing = {
+                    'gpt-4o': 10, 'gpt-4o-mini': 0.3, 'gpt-4-turbo': 20, 'gpt-4': 45, 'gpt-3.5-turbo': 1
+                };
+                Object.entries(usage).forEach(([model, tokens]) => {
+                    const costPer1M = pricing[model] || pricing['gpt-4o'];
+                    const cost = (tokens / 1000000) * costPer1M;
+                    currentTotalCost += cost;
+                    costBreakdown[model] = cost;
+                });
+            }
+            else if (provider === 'aws' && data.costHistory && data.costHistory.length > 0) {
+                // AWS already handles historical data below, so we'll skip the current month logic here
+                // to avoid double updates, but we'll fulfill the historical sync.
+            }
+            else if (provider === 'digitalocean') {
+                // Usage-based billing from DigitalOcean balance API
+                currentTotalCost = data.monthToDateUsage || 0;
+                costBreakdown['usage'] = currentTotalCost;
+            }
+            else if (PLAN_COSTS[provider] && data.plan) {
+                // Plan-based costs (GitHub, Vercel, Linear, Supabase, Notion, etc.)
+                let cost = PLAN_COSTS[provider][data.plan] || 0;
+                // Handle per-user pricing where applicable
+                if (['github', 'linear', 'notion'].includes(provider) && (data.userCount || data.memberCount || 0) > 1) {
+                    const count = data.userCount || data.memberCount || 1;
+                    cost = cost * count;
+                }
+                currentTotalCost = cost;
+                costBreakdown[data.plan] = cost;
+            }
+            // Save current month spend for non-AWS (AWS has its own more complex logic below)
+            if (provider !== 'aws' && currentTotalCost >= 0) {
+                try {
+                    yield BillingSummary_1.BillingSummary.findOneAndUpdate({ connectionId, billingPeriod: currentPeriod }, {
+                        userId,
+                        provider,
+                        billingPeriod: currentPeriod,
+                        totalCost: currentTotalCost,
+                        currency: 'USD',
+                        breakdown: costBreakdown,
+                        fetchedAt: new Date()
+                    }, { upsert: true, new: true });
+                }
+                catch (err) {
+                    console.error(`Error saving BillingSummary for ${provider}:`, err);
+                }
+            }
+            // --- AWS Historical Billing Logic ---
+            if (provider === 'aws' && data.costHistory && data.costHistory.length > 0) {
+                console.log(`📊 Saving ${data.costHistory.length} AWS billing periods to database...`);
+                for (const monthData of data.costHistory) {
+                    const period = (_b = (_a = monthData.TimePeriod) === null || _a === void 0 ? void 0 : _a.Start) === null || _b === void 0 ? void 0 : _b.substring(0, 7); // "YYYY-MM"
+                    if (!period)
+                        continue;
+                    let total = 0;
+                    const breakdown = {};
+                    for (const group of monthData.Groups || []) {
+                        const serviceName = ((_c = group.Keys) === null || _c === void 0 ? void 0 : _c[0]) || 'Unknown';
+                        const amount = parseFloat(((_e = (_d = group.Metrics) === null || _d === void 0 ? void 0 : _d.UnblendedCost) === null || _e === void 0 ? void 0 : _e.Amount) || '0');
+                        total += amount;
+                        breakdown[serviceName] = amount;
+                    }
+                    try {
+                        yield BillingSummary_1.BillingSummary.findOneAndUpdate({ connectionId, billingPeriod: period }, {
+                            userId, provider,
+                            billingPeriod: period,
+                            totalCost: total,
+                            currency: 'USD',
+                            breakdown,
+                            fetchedAt: new Date()
+                        }, { upsert: true, new: true });
+                    }
+                    catch (err) {
+                        console.error('Error saving AWS billing summary:', err);
+                    }
+                }
+            }
+            // Snapshot savings for historical tracking
+            yield AnalyticsService_1.AnalyticsService.snapshotUserSavings(userId);
+            // Check if user qualifies for referral reward
+            yield ReferralService_1.ReferralService.checkAndApplyReward(userId);
+            // Update community stats periodically (every 10th scan)
+            const scanCount = yield ScanResult_1.ScanResult.countDocuments({ userId });
+            if (scanCount % 10 === 0) {
+                yield AnalyticsService_1.AnalyticsService.updateCommunityStats();
             }
             return results;
         });

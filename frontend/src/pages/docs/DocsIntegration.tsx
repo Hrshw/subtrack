@@ -1,6 +1,7 @@
 import { useParams, Navigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { Check, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Check, AlertTriangle, ExternalLink, Copy, Terminal } from 'lucide-react';
+import { toast } from 'sonner';
 
 const integrationData: Record<string, {
     title: string;
@@ -10,16 +11,48 @@ const integrationData: Record<string, {
     permissions: string[];
     setupSteps: string[];
     faq: { q: string; a: string }[];
+    policy?: any;
+    link?: string;
 }> = {
+    openai: {
+        title: 'OpenAI Integration',
+        description: 'Track token usage and optimize model costs across projects.',
+        icon: '🤖',
+        features: [
+            'Token usage monitoring (Input vs Output)',
+            'Model efficiency analysis (GPT-4 vs 4o vs mini)',
+            'Zombie API Key detection',
+            'Estimated monthly spend trends'
+        ],
+        permissions: [
+            'Usage: Read (Required for tracking)',
+            'API Keys: Read (Optional)',
+            'Organizations: Read (Optional)'
+        ],
+        setupSteps: [
+            'Go to OpenAI Dashboard > Settings > Billing',
+            'Ensure you have usage tracking enabled',
+            'Go to Dashboard > API Keys',
+            'Create a "Standard Secret Key" (Recommended)',
+            'If using a "Restricted Key", you must find the "Usage" row and set it to "Read" (Note: This is missing for many new Project keys, in which case use a Standard Key)',
+            'Paste the API Key into SubTrack'
+        ],
+        link: 'https://platform.openai.com/api-keys',
+        faq: [
+            { q: 'Why am I getting a 403 Forbidden error?', a: 'OpenAI requires the "Usage: Read" (api.read) scope to track costs. In the Restricted Key dashboard, you must scroll down past "List Models" and "Assistants" to find the "Usage" row. Set that row specifically to "Read".' },
+            { q: 'Is my prompt data safe?', a: 'SubTrack never sees your actual prompts or completions. We only access token metadata and billing timestamps.' },
+            { q: 'Why is my usage zero?', a: 'Some API keys (especially older ones) do not support the usage-reading API. Ensure you are using a key from a Paid account.' }
+        ]
+    },
     github: {
         title: 'GitHub Integration',
-        description: 'Find unused seats, inactive Copilot licenses, and dormant repositories.',
-        icon: 'github',
+        description: 'Optimize your GitHub spend by identifying inactive seats and dormant repositories.',
+        icon: '🐙',
         features: [
-            'Identify inactive user seats (30+ days no activity)',
-            'Find unused GitHub Copilot licenses',
-            'Detect dormant repositories consuming storage',
-            'Analyze Action runner usage efficiency'
+            'Inactive user seat detection (60+ days no activity)',
+            'Dormant repository identification',
+            'Account-level plan analysis (Free/Pro/Team)',
+            'Public vs Private repository audits'
         ],
         permissions: [
             'read:org (Organization members and usage)',
@@ -40,12 +73,12 @@ const integrationData: Record<string, {
     vercel: {
         title: 'Vercel Integration',
         description: 'Optimize serverless function usage, bandwidth, and team seats.',
-        icon: 'vercel',
+        icon: '▲',
         features: [
-            'Monitor bandwidth usage limits',
-            'Identify unused team seats',
-            'Detect abandoned projects',
-            'Analyze serverless function execution times'
+            'Pro Plan underutilization check (< 20% bandwidth)',
+            'Bandwidth usage tracking vs limits',
+            'Abandoned project detection',
+            'Plan-level cost monitoring'
         ],
         permissions: [
             'Team Settings (Read-only)',
@@ -64,75 +97,274 @@ const integrationData: Record<string, {
     },
     aws: {
         title: 'AWS Integration',
-        description: 'Find idle EC2 instances, unattached EBS volumes, and unused load balancers.',
-        icon: 'aws',
+        description: 'Comprehensive multi-region scan to find zombies and overprovisioned resources.',
+        icon: '☁️',
         features: [
-            'Idle EC2 instance detection (< 5% CPU)',
-            'Unattached EBS volume finder',
-            'Unused Elastic IPs',
-            'Old snapshots consuming storage'
+            'Stop/Oversized EC2 instances (Rightsizing)',
+            'Unattached Elastic IPs (charged when idle)',
+            'Unattached EBS Volumes (zombie storage)',
+            'Unused Lambda functions (last activity check)',
+            'Inefficient DynamoDB billing (Provisioned vs On-demand)',
+            'Inactive S3 buckets (metadata & object activity)',
+            'Stopped/Multi-AZ RDS instances (high cost idle DBs)',
+            'Multi-region scanning (ap-south, us-east, etc.)',
+            'Historical Billing (Cost Explorer integration)'
         ],
         permissions: [
-            'ec2:DescribeInstances',
-            'ec2:DescribeVolumes',
-            'ec2:DescribeAddresses',
-            'cloudwatch:GetMetricStatistics'
+            'EC2:Describe (Instances, Addresses, Volumes)',
+            'S3:ListBuckets & GetBucketLocation',
+            'DynamoDB:ListTables & DescribeTable',
+            'RDS:DescribeDBInstances',
+            'Lambda:ListFunctions',
+            'CE:GetCostAndUsage (Required for Cost History)'
         ],
         setupSteps: [
-            'Go to Dashboard > Connect New Service',
-            'Select AWS',
-            'Enter your Access Key ID and Secret Access Key',
-            'Ensure the user has the required read-only permissions'
+            'Go to AWS Console > IAM > Users',
+            'Create a new user (e.g., "SubTrack-Scanner")',
+            'Select "Attach policies directly" > "Create policy"',
+            'Switch to JSON tab and paste the policy provided below',
+            'Complete user creation and generate "Access Key - Programmatic Access"',
+            'Enter the Access Key and Secret Key in SubTrack'
         ],
+        policy: {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "ec2:DescribeInstances",
+                        "ec2:DescribeVolumes",
+                        "ec2:DescribeAddresses",
+                        "s3:ListAllMyBuckets",
+                        "s3:GetBucketLocation",
+                        "s3:ListBucket",
+                        "dynamodb:ListTables",
+                        "dynamodb:DescribeTable",
+                        "rds:DescribeDBInstances",
+                        "lambda:ListFunctions",
+                        "ce:GetCostAndUsage"
+                    ],
+                    "Resource": "*"
+                }
+            ]
+        },
         faq: [
-            { q: 'Is it safe to share my keys?', a: 'We encrypt your keys using AES-256 before storing them. We recommend creating a dedicated IAM user with read-only permissions.' }
+            { q: 'Is it safe to share my keys?', a: 'We encrypt your keys using AES-256 before storing them. We recommend creating a dedicated IAM user with only the read-only permissions listed below.' },
+            { q: 'Which regions do you scan?', a: 'We scan all major global regions including Mumbai, N. Virginia, Ohio, Oregon, Frankfurt, Ireland, and Singapore.' }
         ]
     },
-    // Add other integrations similarly...
     sentry: {
         title: 'Sentry Integration',
-        description: 'Optimize event quotas and identify unused projects.',
-        icon: 'sentry',
-        features: ['Event quota monitoring', 'Unused project detection', 'Seat usage analysis'],
+        description: 'Optimize event quotas and identify zero-usage projects on paid plans.',
+        icon: '🔍',
+        features: [
+            'Event quota utilization monitoring',
+            'Zero-usage project detection (on paid plans)',
+            'Plan-level cost analysis'
+        ],
         permissions: ['Read-only access to organization stats'],
-        setupSteps: ['Connect via API Key'],
+        setupSteps: [
+            'Login to Sentry > Settings > Developer Settings',
+            'Create a "New Internal Integration" or use an Auth Token',
+            'Assign "org:read" scope',
+            'Copy the token into SubTrack'
+        ],
         faq: []
     },
     linear: {
         title: 'Linear Integration',
-        description: 'Find inactive user seats in your Linear workspace.',
-        icon: 'linear',
-        features: ['Inactive user detection', 'Guest account monitoring'],
+        description: 'Analyze workspace activity to identify inactive or overpaid seats.',
+        icon: '📐',
+        features: [
+            'Individual user activity tracking (Issues touched)',
+            'Inactive seat identification',
+            'Guest account monitoring'
+        ],
         permissions: ['read_organization', 'read_users'],
-        setupSteps: ['Connect via OAuth'],
+        setupSteps: [
+            'Connect via OAuth within SubTrack',
+            'Authorize access to your workspace'
+        ],
         faq: []
     },
     resend: {
         title: 'Resend Integration',
-        description: 'Monitor email usage and optimize plan limits.',
-        icon: 'resend',
-        features: ['Email volume monitoring', 'Domain verification status'],
-        permissions: ['API Key (Full Access required by Resend API currently)'],
-        setupSteps: ['Enter API Key'],
+        description: 'Monitor email volume and optimize domain/plan limits.',
+        icon: '📧',
+        features: [
+            'Email volume monitoring',
+            'Domain count vs Plan limit analysis',
+            'API Key usage auditing'
+        ],
+        permissions: ['API Key (Full Access required by Resend API)'],
+        setupSteps: [
+            'Go to Resend Dashboard > API Keys',
+            'Create a new API Key',
+            'Paste it into SubTrack'
+        ],
         faq: []
     },
     clerk: {
         title: 'Clerk Integration',
-        description: 'Analyze MAU usage and identify inactive users.',
-        icon: 'clerk',
-        features: ['MAU tracking', 'Inactive user identification'],
-        permissions: ['API Key (Read-only)'],
-        setupSteps: ['Enter Secret Key'],
+        description: 'Analyze MAU activity and identify user growth trends.',
+        icon: '🔐',
+        features: [
+            'Monthly Active User (MAU) tracking',
+            'Organization count monitoring',
+            'User tier detection (Free/Hobby/Pro/Enterprise)'
+        ],
+        permissions: ['API Key (Secret Key)'],
+        setupSteps: [
+            'Go to Clerk Dashboard > API Keys',
+            'Copy your Secret Key (starting with sk_...)',
+            'Paste it into SubTrack'
+        ],
         faq: []
     },
     stripe: {
         title: 'Stripe Integration',
-        description: 'Analyze spending trends and subscription costs.',
-        icon: 'stripe',
-        features: ['Subscription cost analysis', 'Spending trends', 'Duplicate subscription detection'],
+        description: 'Analyze transaction volume and active subscription growth.',
+        icon: '💳',
+        features: [
+            'Transaction volume monitoring',
+            'Active subscription count tracking',
+            'Account health and country-specific checks'
+        ],
         permissions: ['Restricted API Key (Read-only)'],
-        setupSteps: ['Enter Restricted API Key'],
+        setupSteps: [
+            'Go to Stripe > Developers > API Keys',
+            'Create a "Restricted Key"',
+            'Grant Read-only access to: Accounts, Charges, Subscriptions',
+            'Copy the restricted key (rk_...) into SubTrack'
+        ],
         faq: []
+    },
+    digitalocean: {
+        title: 'DigitalOcean Integration',
+        description: 'Scan your DigitalOcean environment for idle droplets, unattached volumes, and forgotten snapshots.',
+        icon: '🌊',
+        features: [
+            'Stopped droplet detection',
+            'Unattached block storage volumes',
+            'Abandoned snapshots & backups',
+            'Load balancer optimization'
+        ],
+        permissions: [
+            'Personal Access Token (Read-only)'
+        ],
+        setupSteps: [
+            'Login to DigitalOcean Cloud Console',
+            'Go to API > Tokens/Keys',
+            'Click "Generate New Token"',
+            'Name it "SubTrack" and ensure only "Read" is selected',
+            'Copy the token (starts with dop_v1_) and paste it in SubTrack'
+        ],
+        link: 'https://cloud.digitalocean.com/account/api/tokens',
+        faq: [
+            { q: 'Which resources do you track?', a: 'We track Droplets, Volumes, Snapshots, and Load Balancers. We flag any stopped droplet that is still incurring costs.' }
+        ]
+    },
+    supabase: {
+        title: 'Supabase Integration',
+        description: 'Monitor your Supabase projects, database activity, and plan utilization.',
+        icon: '⚡',
+        features: [
+            'Paused project monitoring',
+            'Database activity auditing',
+            'Plan-level limit checks',
+            'Storage utilization trends'
+        ],
+        permissions: [
+            'Personal Access Token (sbp_...)'
+        ],
+        setupSteps: [
+            'Go to your Supabase Dashboard',
+            'Click your profile icon > Account Preferences',
+            'Select "Access Tokens"',
+            'Generate a new token named "SubTrack"',
+            'Copy and paste the token into SubTrack'
+        ],
+        link: 'https://supabase.com/dashboard/account/tokens',
+        faq: [
+            { q: 'Can you see my data?', a: 'No. We use the Management API which only gives us access to infrastructure meta-data. We cannot query your database rows.' }
+        ]
+    },
+    notion: {
+        title: 'Notion Integration',
+        description: 'Audit your Notion workspace seats and identify inactive members.',
+        icon: '📝',
+        features: [
+            'Member activity tracking',
+            'Inactive seat detection',
+            'Workspace plan analysis',
+            'Guest account auditing'
+        ],
+        permissions: [
+            'Internal Integration Token'
+        ],
+        setupSteps: [
+            'Go to Notion Settings > Connections',
+            'Select "Develop or manage integrations"',
+            'Create a new "Internal Integration" named "SubTrack"',
+            'Copy the "Internal Integration Token"',
+            'Ensure the integration is added to the workspace'
+        ],
+        link: 'https://www.notion.so/my-integrations',
+        faq: [
+            { q: 'How do you track activity?', a: 'We check member-level audit logs and last-active timestamps to see who is actually using their seat.' }
+        ]
+    },
+    gcp: {
+        title: 'Google Cloud Integration',
+        description: 'Scan your GCP projects for idle VMs, unattached disks, and over-provisioned resources.',
+        icon: '🔷',
+        features: [
+            'Stopped Compute Engine instances',
+            'Unattached Persistent Disks',
+            'Idle Cloud SQL instances',
+            'Unused static IP addresses',
+            'Cloud Storage bucket analysis'
+        ],
+        permissions: [
+            'Service Account with Viewer role'
+        ],
+        setupSteps: [
+            'Go to GCP Console > IAM & Admin > Service Accounts',
+            'Create a new Service Account named "SubTrack"',
+            'Grant "Viewer" role to the service account',
+            'Create a JSON key for the service account',
+            'Paste the JSON key contents into SubTrack'
+        ],
+        link: 'https://console.cloud.google.com/iam-admin/serviceaccounts',
+        faq: [
+            { q: 'Which GCP services do you scan?', a: 'We scan Compute Engine, Cloud SQL, Persistent Disks, Static IPs, and Cloud Storage for cost optimization opportunities.' }
+        ]
+    },
+    azure: {
+        title: 'Azure Integration',
+        description: 'Monitor your Azure subscriptions for idle VMs, unattached disks, and orphaned resources.',
+        icon: '🔵',
+        features: [
+            'Stopped Virtual Machines',
+            'Unattached Managed Disks',
+            'Unused Public IP addresses',
+            'Idle Azure SQL databases',
+            'Storage account optimization'
+        ],
+        permissions: [
+            'Service Principal with Reader role'
+        ],
+        setupSteps: [
+            'Go to Azure Portal > Azure Active Directory > App registrations',
+            'Create a new App registration named "SubTrack"',
+            'Create a client secret for the application',
+            'Assign "Reader" role to the App at subscription level',
+            'Copy the Tenant ID, Client ID, and Client Secret into SubTrack'
+        ],
+        link: 'https://portal.azure.com/#view/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/~/RegisteredApps',
+        faq: [
+            { q: 'Which Azure resources do you scan?', a: 'We scan Virtual Machines, Managed Disks, Public IPs, Azure SQL, and Storage Accounts for cost optimization.' }
+        ]
     }
 };
 
@@ -155,7 +387,7 @@ const DocsIntegration = () => {
                 <div className="flex items-center gap-4 mb-8">
                     <div className="w-16 h-16 rounded-2xl bg-slate-800 flex items-center justify-center border border-slate-700">
                         {/* Placeholder for icon */}
-                        <span className="text-2xl font-bold text-white capitalize">{data.icon[0]}</span>
+                        <span className="text-2xl font-bold text-white capitalize">{data.icon}</span>
                     </div>
                     <div>
                         <h1 className="text-4xl font-bold text-white mb-2">{data.title}</h1>
@@ -206,6 +438,37 @@ const DocsIntegration = () => {
                         </div>
                     ))}
                 </div>
+
+                {data.policy && (
+                    <div className="mb-12">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-2xl font-bold text-white m-0 flex items-center gap-2">
+                                <Terminal className="w-6 h-6 text-emerald-400" />
+                                IAM Policy JSON
+                            </h2>
+                            <button
+                                onClick={() => {
+                                    navigator.clipboard.writeText(JSON.stringify(data.policy, null, 2));
+                                    toast.success('Policy copied to clipboard');
+                                }}
+                                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all text-sm font-medium"
+                            >
+                                <Copy className="w-4 h-4" /> Copy Policy
+                            </button>
+                        </div>
+                        <div className="relative group">
+                            <pre className="bg-slate-950 p-6 rounded-xl border border-slate-800 text-sm font-mono text-emerald-400/80 overflow-x-auto shadow-2xl">
+                                {JSON.stringify(data.policy, null, 2)}
+                            </pre>
+                            <div className="absolute top-4 right-4 text-[10px] uppercase tracking-widest font-bold text-slate-600">
+                                JSON Configuration
+                            </div>
+                        </div>
+                        <p className="mt-4 text-sm text-slate-500 italic">
+                            * This policy follows the principle of least privilege, granting only the read-only access necessary for SubTrack to function.
+                        </p>
+                    </div>
+                )}
 
                 {data.faq.length > 0 && (
                     <>

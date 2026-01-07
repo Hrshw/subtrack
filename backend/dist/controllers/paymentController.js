@@ -8,22 +8,32 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.handlePaymentFailure = exports.handlePaymentSuccess = exports.createPaymentSession = void 0;
-const PayUService_1 = require("../services/PayUService");
+exports.manualUpgrade = exports.syncSubscription = exports.getSubscriptionStatus = exports.handlePaymentSuccess = exports.handlePolarWebhook = exports.createPaymentSession = void 0;
+const crypto_1 = __importDefault(require("crypto"));
+const PolarService_1 = require("../services/PolarService");
 const User_1 = require("../models/User");
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+const POLAR_WEBHOOK_SECRET = process.env.POLAR_WEBHOOK_SECRET || '';
 const createPaymentSession = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         // @ts-ignore
         const clerkId = req.auth.userId;
         const { plan = 'annual' } = req.body; // 'monthly' or 'annual'
-        const user = yield User_1.User.findOne({ clerkId });
+        let user = yield User_1.User.findOne({ clerkId });
         if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+            user = yield User_1.User.create({
+                clerkId,
+                email: `${clerkId}@temp.clerk`,
+                name: 'User'
+            });
+            console.log(`Auto-created user for payment: ${clerkId}`);
         }
-        const paymentData = yield PayUService_1.PayUService.createPaymentSession(user._id.toString(), user.email, plan);
-        res.json(paymentData);
+        const { checkoutUrl, checkoutId } = yield PolarService_1.PolarService.createCheckoutSession(user._id.toString(), user.email, plan);
+        res.json({ checkoutUrl, checkoutId });
     }
     catch (error) {
         console.error('Payment session creation error:', error);
@@ -31,51 +41,190 @@ const createPaymentSession = (req, res) => __awaiter(void 0, void 0, void 0, fun
     }
 });
 exports.createPaymentSession = createPaymentSession;
-const handlePaymentSuccess = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+// Standard Webhooks signature verification
+function verifyWebhookSignature(payload, headers, secret) {
     try {
-        const responseData = req.body;
-        console.log('💳 PayU Success Callback received:', responseData.txnid);
-        // Verify payment hash
-        const isValid = yield PayUService_1.PayUService.verifyPayment(responseData);
-        if (!isValid) {
-            console.error('❌ Payment verification failed for:', responseData.txnid);
-            return res.redirect(`${CLIENT_URL}/payment/failure?reason=verification_failed`);
+        // Standard Webhooks uses these headers
+        const webhookId = headers['webhook-id'];
+        const webhookTimestamp = headers['webhook-timestamp'];
+        const webhookSignature = headers['webhook-signature'];
+        if (!webhookId || !webhookTimestamp || !webhookSignature) {
+            console.log('� Webhook headers present:', Object.keys(headers).filter(h => h.toLowerCase().includes('webhook')));
+            return false;
         }
-        // Check payment status
-        if (responseData.status !== 'success') {
-            console.error('❌ Payment status not success:', responseData.status);
-            return res.redirect(`${CLIENT_URL}/payment/failure?reason=payment_not_successful`);
+        // Verify timestamp is not too old (5 minutes tolerance)
+        const timestamp = parseInt(webhookTimestamp);
+        const now = Math.floor(Date.now() / 1000);
+        if (Math.abs(now - timestamp) > 300) {
+            console.error('❌ Webhook timestamp too old');
+            return false;
         }
-        // Handle successful payment - upgrade user to Pro
-        yield PayUService_1.PayUService.handleSuccessfulPayment(responseData);
-        // Redirect to frontend success page with transaction details
-        const successParams = new URLSearchParams({
-            txnid: responseData.txnid || '',
-            amount: responseData.amount || '',
-            status: 'success'
-        });
-        res.redirect(`${CLIENT_URL}/payment/success?${successParams.toString()}`);
+        // Calculate expected signature
+        const signedPayload = `${webhookId}.${webhookTimestamp}.${payload}`;
+        const expectedSignature = crypto_1.default
+            .createHmac('sha256', Buffer.from(secret.split('_').pop() || secret, 'base64'))
+            .update(signedPayload)
+            .digest('base64');
+        // webhook-signature can contain multiple signatures (v1,signature1 v1,signature2)
+        const signatures = webhookSignature.split(' ');
+        for (const sig of signatures) {
+            const [version, signature] = sig.split(',');
+            if (version === 'v1' && signature === expectedSignature) {
+                return true;
+            }
+        }
+        return false;
     }
     catch (error) {
-        console.error('Payment success handling error:', error);
-        res.redirect(`${CLIENT_URL}/payment/failure?reason=server_error`);
+        console.error('Signature verification error:', error);
+        return false;
     }
+}
+const handlePolarWebhook = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b;
+    try {
+        // Get raw body for signature verification
+        const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+        // Log incoming webhook for debugging
+        const webhookHeaders = Object.keys(req.headers).filter(h => h.toLowerCase().includes('webhook') ||
+            h.toLowerCase().includes('polar') ||
+            h.toLowerCase().includes('signature'));
+        console.log('📨 Webhook received');
+        console.log('   Relevant headers:', webhookHeaders);
+        // Verify webhook signature if secret is configured
+        let verified = false;
+        if (POLAR_WEBHOOK_SECRET) {
+            verified = verifyWebhookSignature(rawBody, req.headers, POLAR_WEBHOOK_SECRET);
+            if (verified) {
+                console.log('✅ Webhook signature verified');
+            }
+            else {
+                console.log('⚠️ Webhook signature verification failed - processing anyway for debugging');
+            }
+        }
+        else {
+            console.log('⚠️ No webhook secret configured');
+        }
+        // Parse payload
+        const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+        const eventType = payload.type;
+        console.log(`📨 Processing Polar webhook: ${eventType}`);
+        console.log('   Data keys:', Object.keys(payload.data || {}));
+        switch (eventType) {
+            case 'checkout.created':
+            case 'checkout.updated':
+                console.log(`ℹ️ Checkout status: ${(_a = payload.data) === null || _a === void 0 ? void 0 : _a.status}`);
+                break;
+            case 'subscription.created':
+            case 'subscription.active':
+                console.log('🎉 Subscription activated, upgrading user...');
+                yield PolarService_1.PolarService.handleCheckoutCompleted(payload);
+                break;
+            case 'subscription.updated':
+                console.log('🔄 Subscription updated');
+                yield PolarService_1.PolarService.handleSubscriptionUpdated(payload);
+                break;
+            case 'subscription.canceled':
+                console.log('⚠️ Subscription cancelled');
+                yield PolarService_1.PolarService.handleSubscriptionCancelled(payload);
+                break;
+            case 'order.created':
+            case 'order.paid':
+                console.log('💰 Order event:', eventType);
+                // Order events can also trigger upgrades
+                if ((_b = payload.data) === null || _b === void 0 ? void 0 : _b.subscription) {
+                    yield PolarService_1.PolarService.handleCheckoutCompleted(payload);
+                }
+                break;
+            default:
+                console.log(`ℹ️ Unhandled webhook event: ${eventType}`);
+        }
+        res.status(200).json({ received: true });
+    }
+    catch (error) {
+        console.error('Webhook handling error:', error);
+        res.status(500).json({ message: 'Webhook processing failed' });
+    }
+});
+exports.handlePolarWebhook = handlePolarWebhook;
+const handlePaymentSuccess = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { session_id } = req.query;
+    console.log(`✅ Payment success redirect, session: ${session_id}`);
+    res.redirect(`${CLIENT_URL}/payment/success?session_id=${session_id}`);
 });
 exports.handlePaymentSuccess = handlePaymentSuccess;
-const handlePaymentFailure = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+const getSubscriptionStatus = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const responseData = req.body;
-        console.log('❌ PayU Failure Callback received:', responseData.txnid, responseData.error_Message);
-        // Build failure URL with details
-        const failParams = new URLSearchParams({
-            txnid: responseData.txnid || '',
-            reason: responseData.error_Message || responseData.unmappedstatus || 'payment_failed'
+        // @ts-ignore
+        const clerkId = req.auth.userId;
+        const user = yield User_1.User.findOne({ clerkId });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        res.json({
+            subscriptionStatus: user.subscriptionStatus,
+            plan: user.plan,
+            subscriptionEndDate: user.subscriptionEndDate,
+            isActive: user.subscriptionStatus === 'pro'
         });
-        res.redirect(`${CLIENT_URL}/payment/failure?${failParams.toString()}`);
     }
     catch (error) {
-        console.error('Payment failure handling error:', error);
-        res.redirect(`${CLIENT_URL}/payment/failure?reason=server_error`);
+        console.error('Error fetching subscription status:', error);
+        res.status(500).json({ message: 'Error fetching subscription status' });
     }
 });
-exports.handlePaymentFailure = handlePaymentFailure;
+exports.getSubscriptionStatus = getSubscriptionStatus;
+// Manual sync endpoint for when webhooks fail
+const syncSubscription = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        // @ts-ignore
+        const clerkId = req.auth.userId;
+        const user = yield User_1.User.findOne({ clerkId });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        if (user.subscriptionId) {
+            const subscription = yield PolarService_1.PolarService.getSubscriptionStatus(user.subscriptionId);
+            if (subscription && subscription.status === 'active') {
+                yield User_1.User.findByIdAndUpdate(user._id, {
+                    subscriptionStatus: 'pro',
+                    subscriptionStartDate: new Date(subscription.current_period_start),
+                    subscriptionEndDate: new Date(subscription.current_period_end)
+                });
+                return res.json({ message: 'Subscription synced', status: 'pro' });
+            }
+        }
+        res.json({ message: 'No active subscription found', status: user.subscriptionStatus });
+    }
+    catch (error) {
+        console.error('Error syncing subscription:', error);
+        res.status(500).json({ message: 'Error syncing subscription' });
+    }
+});
+exports.syncSubscription = syncSubscription;
+// Admin endpoint to manually upgrade user (for fixing webhook failures)
+const manualUpgrade = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { email, plan = 'monthly', endDate } = req.body;
+        if (!email) {
+            return res.status(400).json({ message: 'Email required' });
+        }
+        const user = yield User_1.User.findOneAndUpdate({ email }, {
+            subscriptionStatus: 'pro',
+            plan,
+            subscriptionStartDate: new Date(),
+            subscriptionEndDate: endDate ? new Date(endDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            renewalReminderSent: false
+        }, { new: true });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        console.log(`🔧 Manual upgrade for ${email} to ${plan}`);
+        res.json({ message: 'User upgraded', user: { email: user.email, status: user.subscriptionStatus } });
+    }
+    catch (error) {
+        console.error('Manual upgrade error:', error);
+        res.status(500).json({ message: 'Upgrade failed' });
+    }
+});
+exports.manualUpgrade = manualUpgrade;

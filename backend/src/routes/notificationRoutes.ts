@@ -64,9 +64,18 @@ router.post('/test-email', async (req, res) => {
         const clerkId = req.auth.userId;
         const { type } = req.body; // 'digest' or 'alert'
 
-        const user = await User.findOne({ clerkId });
-        if (!user || !user.email) {
-            return res.status(404).json({ message: 'User email not found' });
+        let user = await User.findOne({ clerkId });
+        if (!user) {
+            user = await User.create({
+                clerkId,
+                email: `${clerkId}@temp.clerk`,
+                name: 'User'
+            });
+            console.log(`Auto-created user for notification test: ${clerkId}`);
+        }
+
+        if (!user.email) {
+            return res.status(400).json({ message: 'User email not found' });
         }
 
         if (type === 'digest') {
@@ -77,6 +86,11 @@ router.post('/test-email', async (req, res) => {
                     { resourceName: 'GitHub Copilot', reason: 'Inactive for 45 days', potentialSavings: 800 },
                     { resourceName: 'Vercel Pro', reason: 'Underutilized limits', potentialSavings: 1600 }
                 ]
+            );
+        } else if (type === 'welcome') {
+            await EmailService.sendWelcomeEmail(
+                user.email,
+                user.name || 'Developer'
             );
         } else {
             await EmailService.sendLeakAlert(

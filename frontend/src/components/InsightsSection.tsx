@@ -14,11 +14,12 @@ import { Button } from './ui/button';
 import Confetti from 'react-confetti';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
+import { useCurrency } from '../contexts/CurrencyContext';
 
 // --- Types ---
 export interface Leak {
     _id: string;
-    connectionId?: string;
+    connectionId?: string | { _id: string; provider: string };
     resourceName: string;
     resourceType: string;
     status: 'zombie' | 'downgrade_possible' | 'active';
@@ -61,6 +62,8 @@ const cleanAIResponse = (text: string) => {
 };
 
 const InsightCard = ({ leak, onClick }: { leak: Leak; onClick: () => void }) => {
+    const { formatAmount } = useCurrency();
+
     const getUsageText = () => {
         if (leak.resourceType === 'S3 Bucket' && leak.rawData?.lastModified) {
             try {
@@ -106,7 +109,7 @@ const InsightCard = ({ leak, onClick }: { leak: Leak; onClick: () => void }) => 
                 </div>
                 <div className="text-right">
                     <div className={`text-xl font-black ${leak.status === 'zombie' ? 'text-red-400' : 'text-amber-400'}`}>
-                        ₹{leak.potentialSavings.toLocaleString('en-IN')}
+                        {formatAmount(leak.potentialSavings)}
                     </div>
                     <p className="text-xs text-slate-500">/month</p>
                 </div>
@@ -127,6 +130,8 @@ const InsightCard = ({ leak, onClick }: { leak: Leak; onClick: () => void }) => 
 
 const HealthyStateFree = ({ savings }: { savings: number }) => {
     const navigate = useNavigate();
+    const { formatAmount } = useCurrency();
+
     return (
         <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -147,7 +152,7 @@ const HealthyStateFree = ({ savings }: { savings: number }) => {
 
             <h2 className="text-3xl font-black text-white mb-2">Cost Champion!</h2>
             <p className="text-emerald-200 text-lg mb-6">
-                You saved <span className="font-bold text-emerald-400">₹{savings.toLocaleString('en-IN')}/year</span> by staying optimal.
+                You saved <span className="font-bold text-emerald-400">{formatAmount(savings)}/year</span> by staying optimal.
             </p>
 
             <div
@@ -163,38 +168,42 @@ const HealthyStateFree = ({ savings }: { savings: number }) => {
     );
 };
 
-const HealthyStatePro = ({ savings }: { savings: number }) => (
-    <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-900/40 to-purple-900/40 border border-amber-500/30 p-8 text-center"
-    >
-        <div className="absolute top-0 left-0 w-full h-full bg-[url('/grid.svg')] opacity-10" />
-        <div className="absolute -top-20 -left-20 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-0 right-0 w-64 h-64 bg-amber-500/20 rounded-full blur-3xl animate-pulse" />
+const HealthyStatePro = ({ savings }: { savings: number }) => {
+    const { formatAmount } = useCurrency();
 
+    return (
         <motion.div
-            animate={{ rotate: [0, 10, -10, 0] }}
-            transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-            className="inline-block mb-6 relative"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-900/40 to-purple-900/40 border border-amber-500/30 p-8 text-center"
         >
-            <div className="absolute inset-0 bg-amber-400 blur-xl opacity-40 rounded-full" />
-            <Crown className="w-20 h-20 text-amber-400 relative z-10" />
+            <div className="absolute top-0 left-0 w-full h-full bg-[url('/grid.svg')] opacity-10" />
+            <div className="absolute -top-20 -left-20 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl animate-pulse" />
+            <div className="absolute bottom-0 right-0 w-64 h-64 bg-amber-500/20 rounded-full blur-3xl animate-pulse" />
+
+            <motion.div
+                animate={{ rotate: [0, 10, -10, 0] }}
+                transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+                className="inline-block mb-6 relative"
+            >
+                <div className="absolute inset-0 bg-amber-400 blur-xl opacity-40 rounded-full" />
+                <Crown className="w-20 h-20 text-amber-400 relative z-10" />
+            </motion.div>
+
+            <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-200 mb-2">
+                Absolute Legend Status
+            </h2>
+            <p className="text-amber-100/80 text-lg mb-6">
+                Top 1% of savers · <span className="font-bold text-amber-300">{formatAmount(savings)}/year</span> saved
+            </p>
+
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/20">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <span className="text-sm font-medium text-amber-200">Your efficiency is unmatched</span>
+            </div>
         </motion.div>
-
-        <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-200 mb-2">
-            Absolute Legend Status
-        </h2>
-        <p className="text-amber-100/80 text-lg mb-6">
-            Top 1% of savers · <span className="font-bold text-amber-300">₹{savings.toLocaleString('en-IN')}/year</span> saved
-        </p>
-
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/20">
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <span className="text-sm font-medium text-amber-200">Your efficiency is unmatched</span>
-        </div>
-    </motion.div>
-);
+    );
+};
 
 const AIResponseRenderer = ({ text }: { text: string }) => {
     if (!text) return null;
@@ -232,6 +241,7 @@ const AIResponseRenderer = ({ text }: { text: string }) => {
 };
 
 const InsightsSection = ({ leaks, connections, subscriptionStatus, lastScanTime }: InsightsSectionProps) => {
+    const { formatAmount } = useCurrency();
     const [activeTab, setActiveTab] = useState<'action_required' | 'healthy'>('action_required');
     const [selectedLeak, setSelectedLeak] = useState<Leak | null>(null);
     const [showConfetti, setShowConfetti] = useState(false);
@@ -276,31 +286,31 @@ const InsightsSection = ({ leaks, connections, subscriptionStatus, lastScanTime 
                 </div>
 
                 {/* Tab Switcher */}
-                <div className="flex p-1 bg-slate-800/50 rounded-lg border border-white/5">
+                <div className="flex p-1 bg-slate-800/50 rounded-lg border border-white/5 overflow-x-auto scrollbar-hide">
                     <button
                         onClick={() => setActiveTab('action_required')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'action_required'
+                        className={`flex-shrink-0 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${activeTab === 'action_required'
                             ? 'bg-slate-700 text-white shadow-sm'
                             : 'text-slate-400 hover:text-slate-200'
                             }`}
                     >
                         Action Required
                         {activeLeaks.length > 0 && (
-                            <span className="ml-2 px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 text-xs">
+                            <span className="ml-2 px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[10px]">
                                 {activeLeaks.length}
                             </span>
                         )}
                     </button>
                     <button
                         onClick={() => setActiveTab('healthy')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'healthy'
+                        className={`flex-shrink-0 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${activeTab === 'healthy'
                             ? 'bg-emerald-900/30 text-emerald-400 shadow-sm border border-emerald-500/20'
                             : 'text-slate-400 hover:text-slate-200'
                             }`}
                     >
                         Healthy Resources
                         {healthyServices.length > 0 && (
-                            <span className="ml-2 px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs">
+                            <span className="ml-2 px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px]">
                                 {healthyServices.length}
                             </span>
                         )}
@@ -310,7 +320,7 @@ const InsightsSection = ({ leaks, connections, subscriptionStatus, lastScanTime 
                 {activeLeaks.length > 0 && activeTab === 'action_required' && (
                     <div className="text-right hidden md:block">
                         <p className="text-sm text-slate-400">Potential Savings</p>
-                        <p className="text-xl font-black text-emerald-400">₹{totalLeakSavings.toLocaleString('en-IN')}/mo</p>
+                        <p className="text-xl font-black text-emerald-400">{formatAmount(totalLeakSavings)}/mo</p>
                     </div>
                 )}
             </div>
@@ -441,7 +451,7 @@ const InsightsSection = ({ leaks, connections, subscriptionStatus, lastScanTime 
                             <div className="space-y-4 mb-8">
                                 <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700">
                                     <p className="text-sm text-slate-400 mb-1">Potential Savings</p>
-                                    <p className="text-3xl font-black text-white">₹{selectedLeak.potentialSavings.toLocaleString('en-IN')}<span className="text-sm text-slate-500 font-normal">/mo</span></p>
+                                    <p className="text-3xl font-black text-white">{formatAmount(selectedLeak.potentialSavings)}<span className="text-sm text-slate-500 font-normal">/mo</span></p>
                                 </div>
 
                                 <div>
@@ -465,7 +475,7 @@ const InsightsSection = ({ leaks, connections, subscriptionStatus, lastScanTime 
                                     className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold"
                                     onClick={() => {
                                         const connId = typeof selectedLeak.connectionId === 'object'
-                                            ? (selectedLeak.connectionId as any)._id
+                                            ? ((selectedLeak.connectionId as any)._id || (selectedLeak.connectionId as any).id)
                                             : selectedLeak.connectionId;
 
                                         if (connId) {

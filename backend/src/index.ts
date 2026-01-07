@@ -2,6 +2,8 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import helmet from 'helmet';
+import { rateLimit } from 'express-rate-limit';
 import { connectDB } from './config/db';
 import userRoutes from './routes/userRoutes';
 import connectionRoutes from './routes/connectionRoutes';
@@ -12,6 +14,11 @@ import robotRoutes from './routes/robotRoutes';
 import paymentRoutes from './routes/paymentRoutes';
 import oauthRoutes from './routes/oauthRoutes';
 import supportRoutes from './routes/supportRoutes';
+import adminRoutes from './routes/adminRoutes';
+import analyticsRoutes from './routes/analyticsRoutes';
+import referralRoutes from './routes/referralRoutes';
+import slackRoutes from './routes/slackRoutes';
+import { startSubscriptionReminderCron } from './cron/subscriptionReminder';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
@@ -98,8 +105,41 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
+// Security Middleware
+app.use(helmet({
+    contentSecurityPolicy: false, // Disabled for development/SPA flexibility
+    crossOriginEmbedderPolicy: false
+}));
+
+// Rate Limiting - Generous limits for SPA with many API calls per page
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 500, // Limit each IP to 500 requests per 15 minutes (SPAs make multiple calls)
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+    message: { error: 'Too many requests, please try again later.' },
+    skip: (req) => process.env.NODE_ENV === 'development' // Skip rate limiting in development
+});
+
+// Apply rate limiter to all routes
+app.use('/api/', limiter);
+
+// Stricter limiter for sensitive endpoints (payment, AI)
+const sensitiveLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 50, // Limit each IP to 50 requests per hour for sensitive operations
+    message: { error: 'Too many requests to sensitive endpoints, please try again in an hour.' },
+    skip: (req) => process.env.NODE_ENV === 'development'
+});
+
+app.use('/api/payment/', sensitiveLimiter);
+app.use('/api/robot/chat', sensitiveLimiter);
+
 // Connect to Database
 connectDB();
+
+// Start cron jobs
+startSubscriptionReminderCron();
 
 // Routes
 app.use('/api/users', userRoutes);
@@ -111,6 +151,10 @@ app.use('/api/robot', robotRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/oauth', oauthRoutes);
 app.use('/api/support', supportRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/referral', referralRoutes);
+app.use('/api/slack', slackRoutes);
 
 // Serve static frontend files from 'public' directory
 const publicPath = path.join(__dirname, '..', 'public');

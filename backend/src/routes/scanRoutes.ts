@@ -3,6 +3,10 @@ import { requireAuth } from '../middleware/auth';
 import { Connection } from '../models/Connection';
 import { getIntegration } from '../services/IntegrationService';
 import { ScanResult } from '../models/ScanResult';
+import { BillingSummary } from '../models/BillingSummary';
+import { User } from '../models/User';
+import { AnalyticsService } from '../services/AnalyticsService';
+import { RobotService } from '../services/RobotService';
 
 const router = express.Router();
 
@@ -21,7 +25,11 @@ router.post('/trigger', async (req, res) => {
         let user = await User.findOne({ clerkId });
 
         if (!user) {
-            user = await User.create({ clerkId, email: `${clerkId}@temp.clerk` });
+            user = await User.create({
+                clerkId,
+                email: `${clerkId}@temp.clerk`,
+                name: 'User'
+            });
             console.log(`Auto-created user: ${clerkId}`);
         }
 
@@ -103,20 +111,25 @@ router.post('/trigger', async (req, res) => {
             console.log(`🗑️  Deleted ${deleteResult.deletedCount} old results for ${conn.provider}`);
         }
 
-        // Run fresh scans only for new/stale connections
-        const results = [];
-        for (const conn of connectionsToScan) {
-            const integration = getIntegration(conn.provider);
-            if (integration) {
-                await integration.scan(conn);
-                results.push(`Scanned ${conn.provider}`);
+        // Run fresh scans in parallel for new/stale connections
+        const results: string[] = [];
+        await Promise.all(connectionsToScan.map(async (conn) => {
+            try {
+                const integration = getIntegration(conn.provider);
+                if (integration) {
+                    await integration.scan(conn);
+                    results.push(`Scanned ${conn.provider}`);
 
-                // Update last scanned timestamp
-                await Connection.findByIdAndUpdate(conn._id, {
-                    lastScannedAt: new Date()
-                });
+                    // Update last scanned timestamp
+                    await Connection.findByIdAndUpdate(conn._id, {
+                        lastScannedAt: new Date()
+                    });
+                }
+            } catch (err) {
+                console.error(`Error scanning ${conn.provider}:`, err);
+                // We don't throw here to allow other scans to finish
             }
-        }
+        }));
 
         // Fetch ALL results (old + new merged)
         const scanResults = await ScanResult.find({ userId: user._id })
@@ -134,6 +147,16 @@ router.post('/trigger', async (req, res) => {
             scannedCount: connectionsToScan.length,
             totalConnections: connections.length
         });
+
+        // Trigger community stats update in background
+        AnalyticsService.updateCommunityStats().catch(err =>
+            console.error('Failed to update community stats after scan:', err)
+        );
+
+        // Clear robot cache to force fresh advice
+        RobotService.clearCache(user._id.toString()).catch(err =>
+            console.error('Failed to clear robot cache after scan:', err)
+        );
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Scan failed', error });
@@ -148,7 +171,11 @@ router.get('/results', async (req, res) => {
         let user = await User.findOne({ clerkId });
 
         if (!user) {
-            user = await User.create({ clerkId, email: `${clerkId}@temp.clerk` });
+            user = await User.create({
+                clerkId,
+                email: `${clerkId}@temp.clerk`,
+                name: 'User'
+            });
             console.log(`Auto-created user: ${clerkId}`);
         }
 
@@ -159,6 +186,24 @@ router.get('/results', async (req, res) => {
         res.json(results);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching results' });
+    }
+});
+
+router.get('/billing/:connectionId', async (req, res) => {
+    try {
+        // @ts-ignore
+        const clerkId = req.auth.userId;
+        const user = await User.findOne({ clerkId });
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        const history = await BillingSummary.find({
+            userId: user._id,
+            connectionId: req.params.connectionId
+        }).sort({ billingPeriod: 1 });
+
+        res.json(history);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching billing history' });
     }
 });
 

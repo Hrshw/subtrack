@@ -9,8 +9,11 @@ import { Textarea } from '../components/ui/textarea';
 import Navbar from '../components/Navbar';
 import { ChevronDown, ChevronUp, Mail, Shield, Clock } from 'lucide-react';
 import { toast } from 'sonner';
+import Meta from '../components/Meta';
+import { useAnalytics } from '../hooks/useAnalytics';
 
 const Support = () => {
+    const { trackEvent } = useAnalytics();
     const [expandedFaq, setExpandedFaq] = useState<number | null>(0);
     const [formData, setFormData] = useState({ name: '', email: '', message: '' });
 
@@ -21,23 +24,23 @@ const Support = () => {
         },
         {
             question: "How do I cancel my Pro subscription?",
-            answer: "Go to Settings → Subscription → Cancel. You'll retain Pro access until the end of your billing period. No questions asked, and we offer a 7-day money-back guarantee if you're not satisfied."
+            answer: "Go to Settings → Subscription → Cancel. You'll retain Pro access until the end of your billing period. No questions asked."
         },
         {
             question: "What tools and services do you support?",
-            answer: "Currently: GitHub (Free/Pro/Team), Vercel (Hobby/Pro), AWS, Sentry (Developer/Team/Business), Linear, Resend, Clerk, and Stripe. We're adding more integrations monthly based on user requests!"
+            answer: "Currently: GitHub (Free/Pro/Team), Vercel (Hobby/Pro), AWS, Sentry (Developer/Team/Business), Linear, Resend, Clerk, Stripe, OpenAI, DigitalOcean, Supabase, and Notion. We're adding more integrations every month!"
         },
         {
             question: "How accurate are the savings recommendations?",
-            answer: "Our AI analyzes real usage data from your connected accounts. For example, if you're on GitHub Pro ($4/month) but haven't committed in 90 days, we'll recommend downgrading to Free. Recommendations are based on actual patterns, not guesses. Average users save ₹34,000/month."
+            answer: "Our AI analyzes real usage data from your connected accounts. For example, if you're on GitHub Pro ($4/month) but haven't committed in 90 days, we'll recommend downgrading to Free. Recommendations are based on actual patterns, not guesses. Most users see an immediate ROI of 10-50x their monthly subscription cost."
         },
         {
             question: "Can I connect my team's accounts?",
-            answer: "Yes! Pro users can connect unlimited accounts. Each team member needs their own SubTrack account, but you can monitor all your organization's tools from one dashboard."
+            answer: "Yes! Pro users can connect unlimited accounts per service. Whether you have multiple AWS organizations or separate GitHub personal and work accounts, you can monitor everything from one dashboard."
         },
         {
             question: "What's your refund policy?",
-            answer: "7-day money-back guarantee for new Pro subscribers. If you don't save more than ₹799 in your first week, we'll refund you completely. After 7 days, refunds are at our discretion."
+            answer: "You can cancel anytime and retain access until the end of your billing period. Refunds are handled on a case-by-case basis. Contact support@subtrack.pulseguard.in for any concerns."
         },
         {
             question: "How often do you scan my accounts?",
@@ -60,6 +63,7 @@ const Support = () => {
     const handleSubmit = async (e: any) => {
         e.preventDefault();
         const toastId = toast.loading('Sending message...');
+        trackEvent('contact_form_submit', { message_length: formData.message.length });
 
         try {
             const apiUrl = getApiUrl();
@@ -75,6 +79,10 @@ const Support = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950">
+            <Meta
+                title="Support & Help Center"
+                description="Need help with SubTrack? Contact our developer support team for assistance with integrations, billing, or general inquiries."
+            />
             <Navbar />
             <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-32 pb-20">
                 <div className="text-center mb-16">
@@ -197,8 +205,8 @@ const Support = () => {
                             <div className="mt-6 text-center">
                                 <p className="text-sm text-slate-400">
                                     Or email us directly at{' '}
-                                    <a href="mailto:support@untuuga.resend.app" className="text-emerald-400 hover:underline">
-                                        support@untuuga.resend.app
+                                    <a href="mailto:support@subtrack.pulseguard.in" className="text-emerald-400 hover:underline">
+                                        support@subtrack.pulseguard.in
                                     </a>
                                 </p>
                             </div>

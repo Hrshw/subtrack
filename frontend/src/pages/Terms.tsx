@@ -1,9 +1,14 @@
 import Navbar from '../components/Navbar';
+import Meta from '../components/Meta';
 
 const Terms = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950">
+            <Meta
+                title="Terms of Service"
+                description="Our clear and developer-friendly terms of service. Understand our commitment to your security and the usage of our platform."
+            />
             <Navbar />
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-32 pb-20">
                 <h1 className="text-5xl font-bold text-white mb-4">Terms of Service</h1>
@@ -57,10 +62,9 @@ const Terms = () => {
                     <section className="mb-10">
                         <h2 className="text-3xl font-bold text-white mb-4">5. Payment Terms</h2>
                         <ul className="list-disc ml-6 space-y-2">
-                            <li>All payments are processed securely via Stripe</li>
-                            <li>Prices are in Indian Rupees (INR)</li>
-                            <li>We offer a 7-day money-back guarantee for new Pro subscribers</li>
-                            <li>Refunds after 7 days are at our discretion</li>
+                            <li>All payments are processed securely via Polar</li>
+                            <li>Prices are in USD and INR</li>
+                            <li>Subscriptions auto-renew unless cancelled</li>
                             <li>We reserve the right to change pricing with 30 days' notice</li>
                         </ul>
                     </section>

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { Instagram, Youtube, Linkedin } from 'lucide-react';
 
 const Footer = () => {
     return (
@@ -46,7 +47,7 @@ const Footer = () => {
                         <ul className="space-y-2 text-sm">
                             <li><Link to="/support" className="text-slate-400 hover:text-emerald-400 transition-colors">Help Center</Link></li>
                             <li><Link to="/docs/faq" className="text-slate-400 hover:text-emerald-400 transition-colors">FAQ</Link></li>
-                            <li><a href="mailto:support@untuuga.resend.app" className="text-slate-400 hover:text-emerald-400 transition-colors">Contact Us</a></li>
+                            <li><a href="mailto:support@subtrack.pulseguard.in" className="text-slate-400 hover:text-emerald-400 transition-colors">Contact Us</a></li>
                         </ul>
                     </div>
                 </div>
@@ -56,8 +57,19 @@ const Footer = () => {
                         © {new Date().getFullYear()} SubTrack. All rights reserved.
                     </div>
                     <div className="flex items-center gap-6">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                        <span className="text-xs text-emerald-500 font-medium">All Systems Operational</span>
+                        <a href="https://www.instagram.com/subtrackhub/" target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:text-pink-500 transition-colors">
+                            <Instagram className="w-5 h-5" />
+                        </a>
+                        <a href="https://www.youtube.com/@SubTrackHub" target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:text-red-500 transition-colors">
+                            <Youtube className="w-5 h-5" />
+                        </a>
+                        <a href="https://www.linkedin.com/company/subtrackhub" target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:text-blue-600 transition-colors">
+                            <Linkedin className="w-5 h-5" />
+                        </a>
+                        <div className="flex items-center gap-4 border-l border-slate-800 pl-6">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                            <span className="text-xs text-emerald-500 font-medium">All Systems Operational</span>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -39,9 +39,9 @@ const DocsLanding = () => {
                             <TrendingUp className="w-6 h-6 text-blue-400" />
                         </div>
                         <h3 className="text-xl font-bold text-white mb-2 group-hover:text-blue-400 transition-colors">Integrations</h3>
-                        <p className="text-slate-400">Detailed guides for connecting GitHub, Vercel, AWS, and more.</p>
+                        <p className="text-slate-400">Detailed guides for 14+ cloud providers including AWS, GCP, Azure, GitHub, and more.</p>
                         <div className="mt-4 flex items-center text-blue-400 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                            View integrations <ArrowRight className="w-4 h-4 ml-1" />
+                            View 14+ integrations <ArrowRight className="w-4 h-4 ml-1" />
                         </div>
                     </Link>
 

@@ -10,5 +10,6 @@ const router = express_1.default.Router();
 router.use(auth_1.requireAuth);
 router.get('/', connectionController_1.getConnections);
 router.post('/', connectionController_1.addConnection);
+router.patch('/:id', connectionController_1.updateConnection);
 router.delete('/:id', connectionController_1.removeConnection);
 exports.default = router;

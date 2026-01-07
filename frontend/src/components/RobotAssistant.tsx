@@ -168,25 +168,28 @@ const RobotAssistant = () => {
             }
 
             // Active Roaming Cycle (Permission Granted or Auto-granted after 10 mins)
-            while (isMounted && hasPermission) {
+            while (isMounted && hasPermission && !isOpen) {
                 // Walk to left
                 setIsSitting(false);
                 setIsWalking(true);
                 setSpeech("Patrolling for leaks... 🚶");
                 const targetPos = -200;
                 await controls.start({ x: targetPos, transition: { duration: 6, ease: "linear" } });
+                if (!isMounted || isOpen) break;
                 setIsWalking(false);
 
                 // Wave
                 setIsWaving(true);
                 setSpeech("All clear here! 👋");
                 await new Promise(r => setTimeout(r, 2000));
+                if (!isMounted || isOpen) break;
                 setIsWaving(false);
 
                 // Walk back
                 setIsWalking(true);
                 setSpeech("Heading back... 🚶");
                 await controls.start({ x: 0, transition: { duration: 6, ease: "linear" } });
+                if (!isMounted || isOpen) break;
                 setIsWalking(false);
 
                 // Sit and show AI message or random thought
@@ -201,6 +204,7 @@ const RobotAssistant = () => {
 
                 // Sit for 15s
                 await new Promise(r => setTimeout(r, 15000));
+                if (!isMounted || isOpen) break;
 
                 // Stand
                 setIsSitting(false);
@@ -212,7 +216,7 @@ const RobotAssistant = () => {
         walkCycle();
 
         return () => { isMounted = false; };
-    }, [controls, hasPermission, aiMessage]); // Re-run if aiMessage changes
+    }, [controls, hasPermission, aiMessage, isOpen]); // Re-run if aiMessage or isOpen changes
 
     // --- Fetch Initial Speech on Mount ---
     useEffect(() => {

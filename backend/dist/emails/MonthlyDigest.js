@@ -36,11 +36,11 @@ const MonthlyDigest = ({ savings = 12500, zombies = [], }) => {
                             react_1.default.createElement(components_1.Text, { style: amountText },
                                 "\u20B9",
                                 zombie.potentialSavings))))))),
-                    react_1.default.createElement(components_1.Button, { style: button, href: "https://subtrack.app/dashboard" }, "View Full Report")),
+                    react_1.default.createElement(components_1.Button, { style: button, href: "https://subtrack.pulseguard.in/dashboard" }, "View Full Report")),
                 react_1.default.createElement(components_1.Hr, { style: hr }),
                 react_1.default.createElement(components_1.Section, { style: footer },
                     react_1.default.createElement(components_1.Text, { style: footerText }, "You received this email because you enabled Monthly Digest in SubTrack."),
-                    react_1.default.createElement(components_1.Link, { href: "https://subtrack.app/settings", style: link }, "Manage Notifications"))))));
+                    react_1.default.createElement(components_1.Link, { href: "https://subtrack.pulseguard.in/settings", style: link }, "Manage Notifications"))))));
 };
 exports.MonthlyDigest = MonthlyDigest;
 const main = {

@@ -68,7 +68,7 @@ export const MonthlyDigest = ({
                             </Section>
                         )}
 
-                        <Button style={button} href="https://subtrack.app/dashboard">
+                        <Button style={button} href="https://subtrack.pulseguard.in/dashboard">
                             View Full Report
                         </Button>
                     </Section>
@@ -79,7 +79,7 @@ export const MonthlyDigest = ({
                         <Text style={footerText}>
                             You received this email because you enabled Monthly Digest in SubTrack.
                         </Text>
-                        <Link href="https://subtrack.app/settings" style={link}>
+                        <Link href="https://subtrack.pulseguard.in/settings" style={link}>
                             Manage Notifications
                         </Link>
                     </Section>

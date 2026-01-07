@@ -112,6 +112,7 @@ export const getAuthorizeUrl = async (req: Request, res: Response) => {
         const state = Buffer.from(JSON.stringify({
             userId,
             provider: providerLower,
+            label: req.query.label, // Pass the optional label through OAuth state
             timestamp: Date.now()
         })).toString('base64');
 
@@ -176,7 +177,7 @@ export const handleCallback = async (req: Request, res: Response) => {
 
         // Verify state parameter
         const stateData = JSON.parse(Buffer.from(state as string, 'base64').toString());
-        const { userId, provider: stateProvider, timestamp } = stateData;
+        const { userId, provider: stateProvider, timestamp, label } = stateData;
 
         // Check if state is expired (10 minutes)
         if (Date.now() - timestamp > 10 * 60 * 1000) {
@@ -256,28 +257,15 @@ export const handleCallback = async (req: Request, res: Response) => {
         // Encrypt and save token
         const encryptedToken = encryptToken(accessToken);
 
-        // Check if connection already exists
-        const existingConnection = await Connection.findOne({
+        // Create new connection (Allow multiple for the same provider)
+        await Connection.create({
             userId: user._id,
-            provider: providerLower
+            provider: providerLower,
+            encryptedToken,
+            accountLabel: label || undefined,
+            status: 'active',
+            metadata: { type: 'oauth', connectedAt: new Date() }
         });
-
-        if (existingConnection) {
-            // Update existing connection
-            existingConnection.encryptedToken = encryptedToken;
-            existingConnection.status = 'active';
-            existingConnection.metadata = { type: 'oauth', connectedAt: new Date() };
-            await existingConnection.save();
-        } else {
-            // Create new connection
-            await Connection.create({
-                userId: user._id,
-                provider: providerLower,
-                encryptedToken,
-                status: 'active',
-                metadata: { type: 'oauth', connectedAt: new Date() }
-            });
-        }
 
         // Redirect to frontend dashboard with success
         res.redirect(`${frontendUrl}/dashboard?connected=${providerLower}`);
@@ -330,28 +318,15 @@ export const saveApiKeyConnection = async (req: Request, res: Response) => {
         // Encrypt and save the API key
         const encryptedToken = encryptToken(apiKey);
 
-        // Check if connection already exists
-        const existingConnection = await Connection.findOne({
+        // Always create new connection for API keys too if label is provided or if it's the first one
+        await Connection.create({
             userId: user._id,
-            provider: providerLower
+            provider: providerLower,
+            encryptedToken,
+            accountLabel: req.body.accountLabel || undefined,
+            status: 'active',
+            metadata: { type: 'api_key', connectedAt: new Date() }
         });
-
-        if (existingConnection) {
-            // Update existing connection
-            existingConnection.encryptedToken = encryptedToken;
-            existingConnection.status = 'active';
-            existingConnection.metadata = { type: 'api_key', connectedAt: new Date() };
-            await existingConnection.save();
-        } else {
-            // Create new connection
-            await Connection.create({
-                userId: user._id,
-                provider: providerLower,
-                encryptedToken,
-                status: 'active',
-                metadata: { type: 'api_key', connectedAt: new Date() }
-            });
-        }
 
         console.log(`✅ API key connection saved for ${provider}`);
         res.json({ success: true, message: `${provider} connected successfully` });

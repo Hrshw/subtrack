@@ -15,21 +15,56 @@ const client_lambda_1 = require("@aws-sdk/client-lambda");
 const client_dynamodb_1 = require("@aws-sdk/client-dynamodb");
 const client_s3_1 = require("@aws-sdk/client-s3");
 const client_rds_1 = require("@aws-sdk/client-rds");
+const client_cost_explorer_1 = require("@aws-sdk/client-cost-explorer");
 class AWSScanner {
     constructor(credentials) {
         this.region = credentials.region;
-        const config = {
+        this.config = {
             region: credentials.region,
             credentials: {
                 accessKeyId: credentials.accessKeyId,
                 secretAccessKey: credentials.secretAccessKey
             }
         };
-        this.ec2Client = new client_ec2_1.EC2Client(config);
-        this.lambdaClient = new client_lambda_1.LambdaClient(config);
-        this.dynamoClient = new client_dynamodb_1.DynamoDBClient(config);
-        this.s3Client = new client_s3_1.S3Client(config);
-        this.rdsClient = new client_rds_1.RDSClient(config);
+        this.ec2Client = new client_ec2_1.EC2Client(this.config);
+        this.lambdaClient = new client_lambda_1.LambdaClient(this.config);
+        this.dynamoClient = new client_dynamodb_1.DynamoDBClient(this.config);
+        this.s3Client = new client_s3_1.S3Client(this.config);
+        this.rdsClient = new client_rds_1.RDSClient(this.config);
+        // Cost Explorer is a global billing API, endpoint usually fixed to us-east-1
+        this.costClient = new client_cost_explorer_1.CostExplorerClient(Object.assign(Object.assign({}, this.config), { region: 'us-east-1' }));
+    }
+    updateRegion(region) {
+        const newConfig = Object.assign(Object.assign({}, this.config), { region });
+        this.ec2Client = new client_ec2_1.EC2Client(newConfig);
+        this.lambdaClient = new client_lambda_1.LambdaClient(newConfig);
+        this.dynamoClient = new client_dynamodb_1.DynamoDBClient(newConfig);
+        this.s3Client = new client_s3_1.S3Client(newConfig);
+        this.rdsClient = new client_rds_1.RDSClient(newConfig);
+    }
+    getMonthlyCosts() {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                console.log('💰 Fetching Cost Explorer data...');
+                const now = new Date();
+                const start = new Date(now.getFullYear(), now.getMonth() - 6, 1); // Last 6 months
+                const command = new client_cost_explorer_1.GetCostAndUsageCommand({
+                    TimePeriod: {
+                        Start: start.toISOString().split('T')[0],
+                        End: now.toISOString().split('T')[0]
+                    },
+                    Granularity: 'MONTHLY',
+                    Metrics: ['UnblendedCost'],
+                    GroupBy: [{ Type: 'DIMENSION', Key: 'SERVICE' }]
+                });
+                const response = yield this.costClient.send(command);
+                return response.ResultsByTime || [];
+            }
+            catch (error) {
+                console.warn('⚠️ Cost Explorer access denied or failed. Check CE:GetCostAndUsage permissions.');
+                return [];
+            }
+        });
     }
     scanEC2Instances() {
         return __awaiter(this, void 0, void 0, function* () {
@@ -271,29 +306,67 @@ class AWSScanner {
     }
     scanAll() {
         return __awaiter(this, void 0, void 0, function* () {
-            console.log('🚀 Starting comprehensive AWS scan...');
-            const startTime = Date.now();
-            const [ec2Instances, elasticIPs, ebsVolumes, lambdaFunctions, dynamoDBTables, s3Buckets, rdsInstances] = yield Promise.all([
-                this.scanEC2Instances(),
-                this.scanElasticIPs(),
-                this.scanEBSVolumes(),
-                this.scanLambdaFunctions(),
-                this.scanDynamoDBTables(),
-                this.scanS3Buckets(),
-                this.scanRDSInstances()
-            ]);
-            const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-            console.log(`✅ AWS scan complete in ${duration}s`);
-            return {
-                ec2Instances,
-                elasticIPs,
-                ebsVolumes,
-                lambdaFunctions,
-                dynamoDBTables,
-                s3Buckets,
-                rdsInstances,
-                region: this.region
+            return this.scanGlobal();
+        });
+    }
+    scanGlobal() {
+        return __awaiter(this, void 0, void 0, function* () {
+            console.log('🌍 Starting GLOBAL multi-region AWS scan...');
+            const commonRegions = [
+                'ap-south-1', // Mumbai (likely main for user)
+                'us-east-1', // N. Virginia
+                'us-east-2', // Ohio
+                'us-west-2', // Oregon
+                'eu-central-1', // Frankfurt
+                'eu-west-1', // Ireland
+                'ap-southeast-1' // Singapore
+            ];
+            // Ensure current region is at the start and unique
+            const regionsToScan = [...new Set([this.region, ...commonRegions])];
+            const allResources = {
+                ec2Instances: [],
+                elasticIPs: [],
+                ebsVolumes: [],
+                lambdaFunctions: [],
+                dynamoDBTables: [],
+                s3Buckets: [],
+                rdsInstances: [],
+                costHistory: [],
+                region: this.region,
+                scannedRegions: regionsToScan
             };
+            // 1. Fetch Global Costs (Independent of region loop)
+            allResources.costHistory = yield this.getMonthlyCosts();
+            // 2. Scan each region
+            for (const region of regionsToScan) {
+                console.log(`📡 Scanning region: ${region}...`);
+                try {
+                    this.updateRegion(region);
+                    const [ec2, ips, vols, lambdas, dynamos, rds] = yield Promise.all([
+                        this.scanEC2Instances(),
+                        this.scanElasticIPs(),
+                        this.scanEBSVolumes(),
+                        this.scanLambdaFunctions(),
+                        this.scanDynamoDBTables(),
+                        this.scanRDSInstances()
+                    ]);
+                    // Append regional findings (S3 is handled separately/globally usually)
+                    allResources.ec2Instances.push(...ec2.map(i => (Object.assign(Object.assign({}, i), { region }))));
+                    allResources.elasticIPs.push(...ips.map(i => (Object.assign(Object.assign({}, i), { region }))));
+                    allResources.ebsVolumes.push(...vols.map(i => (Object.assign(Object.assign({}, i), { region }))));
+                    allResources.lambdaFunctions.push(...lambdas.map(l => (Object.assign(Object.assign({}, l), { region }))));
+                    allResources.dynamoDBTables.push(...dynamos.map(d => (Object.assign(Object.assign({}, d), { region }))));
+                    allResources.rdsInstances.push(...rds.map(r => (Object.assign(Object.assign({}, r), { region }))));
+                }
+                catch (error) {
+                    console.error(`❌ Shielded error in region ${region} scan:`, error);
+                }
+            }
+            // 3. Scan S3 Buckets (Global service, but we'll run it once)
+            this.updateRegion(this.region);
+            allResources.s3Buckets = yield this.scanS3Buckets();
+            console.log(`✅ Global Scan Complete! Total Ec2: ${allResources.ec2Instances.length}, Volumes: ${allResources.ebsVolumes.length}`);
+            return allResources;
         });
     }
 }

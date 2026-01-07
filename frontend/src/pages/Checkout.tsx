@@ -35,28 +35,28 @@ const Checkout = () => {
     const plans = {
         monthly: {
             name: 'Monthly',
-            price: 799,
+            price: 9,
             period: '/month',
             savings: null,
             popular: false
         },
         annual: {
             name: 'Annual',
-            price: 7999,
-            originalPrice: 9588,
+            price: 99,
+            originalPrice: 108,
             period: '/year',
-            savings: '17%',
+            savings: '$9',
             popular: true
         }
     };
 
     const features = [
-        { icon: Zap, text: 'Unlimited service connections', highlight: true },
-        { icon: Shield, text: 'Deep AWS infrastructure scan' },
-        { icon: Sparkles, text: 'Savage AI recommendations' },
-        { icon: Star, text: 'Weekly automated scans' },
-        { icon: BadgeCheck, text: 'Priority support' },
-        { icon: Crown, text: 'Export reports (PDF/CSV)' },
+        { icon: Zap, text: 'Unlimited connections & Multi-Account Support', highlight: true },
+        { icon: Shield, text: 'Deep Cloud Scan (AWS, GCP, Azure)' },
+        { icon: Sparkles, text: 'Savage AI Recommendations' },
+        { icon: Star, text: 'Weekly Automated Scans' },
+        { icon: BadgeCheck, text: 'Priority 24/7 Support' },
+        { icon: Crown, text: 'Export Reports (PDF/CSV)' },
     ];
 
     const handlePayment = async () => {
@@ -67,37 +67,17 @@ const Checkout = () => {
             const token = await getToken();
             const apiUrl = getApiUrl();
 
-            // Create PayU payment session
+            // Create Polar checkout session
             const response = await axios.post(
                 `${apiUrl}/payment/create-session`,
                 { plan: selectedPlan },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
-            const paymentData = response.data;
+            const { checkoutUrl } = response.data;
 
-            // Create and submit PayU form
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = paymentData.payuUrl;
-
-            // Add all payment fields
-            const fields = [
-                'key', 'txnid', 'amount', 'productinfo', 'firstname',
-                'email', 'phone', 'surl', 'furl', 'hash',
-                'udf1', 'udf2', 'udf3', 'udf4', 'udf5'
-            ];
-
-            fields.forEach(field => {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = field;
-                input.value = paymentData[field] || '';
-                form.appendChild(input);
-            });
-
-            document.body.appendChild(form);
-            form.submit();
+            // Redirect to Polar checkout
+            window.location.href = checkoutUrl;
 
         } catch (err: any) {
             console.error('Payment error:', err);
@@ -189,14 +169,14 @@ const Checkout = () => {
                                         </div>
 
                                         <div className="flex items-baseline gap-1">
-                                            <span className="text-2xl font-black text-white">₹{plans[plan].price.toLocaleString()}</span>
+                                            <span className="text-2xl font-black text-white">${plans[plan].price.toLocaleString()}</span>
                                             <span className="text-slate-400 text-sm">{plans[plan].period}</span>
                                         </div>
 
                                         {plans[plan].savings && (
                                             <div className="mt-2 flex items-center gap-2">
                                                 <span className="text-slate-500 line-through text-sm">
-                                                    ₹{plans[plan].originalPrice?.toLocaleString()}
+                                                    ${plans[plan].originalPrice?.toLocaleString()}
                                                 </span>
                                                 <span className="text-emerald-400 text-sm font-semibold">
                                                     Save {plans[plan].savings}
@@ -281,18 +261,18 @@ const Checkout = () => {
                                 <div className="space-y-3">
                                     <div className="flex justify-between text-slate-300">
                                         <span>SubTrack Pro ({currentPlan.name})</span>
-                                        <span>₹{currentPlan.price.toLocaleString()}</span>
+                                        <span>${currentPlan.price.toLocaleString()}</span>
                                     </div>
                                     {currentPlan.savings && (
                                         <div className="flex justify-between text-emerald-400 text-sm">
                                             <span>Annual discount ({currentPlan.savings} off)</span>
-                                            <span>-₹{(9588 - 7999).toLocaleString()}</span>
+                                            <span>-$9</span>
                                         </div>
                                     )}
                                     <div className="border-t border-slate-700 pt-3 flex justify-between">
                                         <span className="text-lg font-semibold text-white">Total</span>
                                         <div className="text-right">
-                                            <span className="text-2xl font-black text-white">₹{currentPlan.price.toLocaleString()}</span>
+                                            <span className="text-2xl font-black text-white">${currentPlan.price.toLocaleString()}</span>
                                             <p className="text-slate-400 text-sm">{currentPlan.period}</p>
                                         </div>
                                     </div>
@@ -326,30 +306,20 @@ const Checkout = () => {
                                     ) : (
                                         <div className="flex items-center gap-3">
                                             <Lock className="w-5 h-5" />
-                                            <span>Pay ₹{currentPlan.price.toLocaleString()}</span>
+                                            <span>Pay ${currentPlan.price.toLocaleString()}</span>
                                         </div>
                                     )}
                                 </Button>
 
                                 {/* Payment Methods */}
                                 <div className="text-center">
-                                    <p className="text-slate-500 text-sm mb-3">Powered by PayU - India's trusted payment gateway</p>
+                                    <p className="text-slate-500 text-sm mb-3">Powered by Polar - Global payments for developers</p>
                                     <div className="flex items-center justify-center gap-4 text-slate-600">
-                                        <span className="text-xs">UPI</span>
                                         <span className="text-xs">Cards</span>
-                                        <span className="text-xs">NetBanking</span>
-                                        <span className="text-xs">Wallets</span>
+                                        <span className="text-xs">Apple Pay</span>
+                                        <span className="text-xs">Google Pay</span>
+                                        <span className="text-xs">UPI</span>
                                     </div>
-                                </div>
-
-                                {/* Guarantee */}
-                                <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 text-center">
-                                    <p className="text-emerald-400 text-sm font-medium">
-                                        ✨ 7-day money-back guarantee
-                                    </p>
-                                    <p className="text-slate-400 text-xs mt-1">
-                                        Not satisfied? Get a full refund, no questions asked.
-                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -367,7 +337,7 @@ const Checkout = () => {
                                 ))}
                             </div>
                             <p className="text-slate-300 text-sm italic">
-                                "Paid ₹799, saved ₹15,000 in the first 10 minutes. If you're not using this, you hate money."
+                                "Paid $9, saved thousands in the first 10 minutes. If you're not using this, you hate money."
                             </p>
                             <p className="text-slate-500 text-sm mt-2">— Danny Postma, @dannypostma</p>
                         </motion.div>

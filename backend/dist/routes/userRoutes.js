@@ -11,4 +11,5 @@ const router = express_1.default.Router();
 router.post('/webhook', userController_1.syncUser);
 // Protected routes
 router.get('/me', auth_1.requireAuth, userController_1.getProfile);
+router.patch('/me', auth_1.requireAuth, userController_1.updateProfile);
 exports.default = router;

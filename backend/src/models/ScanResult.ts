@@ -12,10 +12,12 @@ const scanResultSchema = new mongoose.Schema({
     },
     potentialSavings: { type: Number, default: 0 },
     currency: { type: String, default: 'USD' },
+    accountLabel: { type: String }, // Denormalized for faster filtering and display
     reason: { type: String, required: true }, // e.g., "No commits in 92 days"
     smartRecommendation: { type: String }, // AI-generated roast from Gemini
     usesFallback: { type: Boolean, default: false }, // True if Gemini failed
     rawData: { type: mongoose.Schema.Types.Mixed }, // Store raw API data for debugging/display
+    isEstimated: { type: Boolean, default: false }, // True if cost is an approximation (not from Billing API)
     detectedAt: { type: Date, default: Date.now }
 }, { timestamps: true });
 

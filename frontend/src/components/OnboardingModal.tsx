@@ -61,7 +61,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, onCo
             description: 'Pick your first integration to connect:',
             content: (
                 <div className="grid grid-cols-2 gap-3">
-                    {['GitHub', 'Vercel', 'AWS', 'Sentry'].map((provider, idx) => (
+                    {['GitHub', 'Vercel', 'AWS', 'DigitalOcean', 'Supabase', 'Notion'].map((provider, idx) => (
                         <motion.button
                             key={provider}
                             initial={{ opacity: 0, scale: 0.9 }}
@@ -76,7 +76,9 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, onCo
                                 {provider === 'GitHub' && '🐙'}
                                 {provider === 'Vercel' && '▲'}
                                 {provider === 'AWS' && '☁️'}
-                                {provider === 'Sentry' && '🔍'}
+                                {provider === 'DigitalOcean' && '🌊'}
+                                {provider === 'Supabase' && '⚡'}
+                                {provider === 'Notion' && '📝'}
                             </div>
                             <div className="font-semibold group-hover:text-emerald-400 transition-colors">
                                 {provider}

@@ -1,23 +1,58 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Zap, Crown, Star } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import { getApiUrl } from '../lib/api';
+import axios from 'axios';
+import { useAuth } from '@clerk/clerk-react';
+import Meta from '../components/Meta';
+import { useAnalytics } from '../hooks/useAnalytics';
+import { useCurrency } from '../contexts/CurrencyContext';
 
 const Pricing = () => {
+    const { getToken, isSignedIn } = useAuth();
+    const { trackEvent } = useAnalytics();
+    const { formatAmount, getSymbol } = useCurrency();
     const [isAnnual, setIsAnnual] = useState(true);
     const [leaksInput, setLeaksInput] = useState(47000);
 
+    useEffect(() => {
+        const fetchUserData = async () => {
+            if (!isSignedIn) return;
+            try {
+                const token = await getToken();
+                const apiUrl = getApiUrl();
+                const res = await axios.get(`${apiUrl}/analytics/summary`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (res.data?.totalSavings > 0) {
+                    setLeaksInput(res.data.totalSavings);
+                }
+            } catch (e) {
+                console.warn('Could not fetch user savings for ROI calc');
+            }
+        };
+        fetchUserData();
+    }, [getToken, isSignedIn]);
+
     const handleSubscribe = () => {
-        // Redirect to dedicated checkout page with plan param
+        // Track the conversion event
         const plan = isAnnual ? 'annual' : 'monthly';
+        trackEvent('begin_checkout', {
+            items: [{ item_name: `SubTrack Pro ${plan}`, price: isAnnual ? 99 : 9, currency: 'USD' }],
+            value: isAnnual ? 99 : 9,
+            currency: 'USD'
+        });
+
+        // Redirect to dedicated checkout page with plan param
         window.location.href = `/checkout?plan=${plan}`;
     };
 
-    const roiMinutes = Math.round((799 / leaksInput) * 30 * 24 * 60);
-    const roiHours = Math.round((799 / leaksInput) * 30 * 24);
+    const roiMinutes = Math.round((9 / (leaksInput / 83)) * 30 * 24 * 60);
+    const roiHours = Math.round((9 / (leaksInput / 83)) * 30 * 24);
 
     const roiText = roiMinutes < 60
         ? `${roiMinutes} minutes`
@@ -25,6 +60,10 @@ const Pricing = () => {
 
     return (
         <div className="min-h-screen bg-[#0a0e17] text-white font-sans selection:bg-emerald-500/30">
+            <Meta
+                title="Pricing - Choose the Best Plan for Your Developer Stack"
+                description="Affordable plans for developers and startups. Start for free or upgrade to Pro for multi-account support, deep infrastructure scanning, and unlimited integrations."
+            />
             <Navbar />
 
             <main className="pt-32 pb-20 relative overflow-hidden">
@@ -58,7 +97,7 @@ const Pricing = () => {
                             transition={{ delay: 0.2 }}
                             className="text-xl text-slate-400 max-w-2xl mx-auto mb-10"
                         >
-                            Stop bleeding money on forgotten subscriptions. Pro users save an average of ₹1.2 Lakhs per year.
+                            Stop bleeding money on forgotten subscriptions. Pro users save an average of {formatAmount(120000)} per year.
                         </motion.p>
 
                         {/* ROI Calculator */}
@@ -70,11 +109,11 @@ const Pricing = () => {
                         >
                             <div className="flex flex-col md:flex-row items-center gap-4 justify-between">
                                 <div className="text-left">
-                                    <label className="text-sm text-slate-400 block mb-1">Your Monthly Waste (₹)</label>
+                                    <label className="text-sm text-slate-400 block mb-1">Your Monthly Waste ({getSymbol()})</label>
                                     <input
                                         type="number"
-                                        value={leaksInput}
-                                        onChange={(e) => setLeaksInput(Number(e.target.value))}
+                                        value={Math.round(leaksInput / 85)}
+                                        onChange={(e) => setLeaksInput(Number(e.target.value) * 85)}
                                         className="bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-white font-mono w-40 focus:border-emerald-500 outline-none"
                                     />
                                 </div>
@@ -114,7 +153,7 @@ const Pricing = () => {
                                 <p className="text-slate-400">For indie hackers just starting out</p>
                             </div>
                             <div className="mb-8">
-                                <span className="text-4xl font-black text-white">₹0</span>
+                                <span className="text-4xl font-black text-white">{formatAmount(0)}</span>
                                 <span className="text-slate-400">/forever</span>
                             </div>
                             <Link to="/dashboard">
@@ -124,10 +163,11 @@ const Pricing = () => {
                             </Link>
                             <div className="mt-8 space-y-4">
                                 <Feature text="Connect up to 5 services" />
-                                <Feature text="Basic scan (Public repos)" />
+                                <Feature text="Basic scan (Public repos & S3)" />
                                 <Feature text="Monthly email report" />
                                 <Feature text="Standard support" />
                                 <Feature text="Manual refresh only" />
+                                <Feature text="Single account per provider" />
                             </div>
                         </motion.div>
 
@@ -149,10 +189,10 @@ const Pricing = () => {
                             </div>
                             <div className="mb-8">
                                 <div className="flex items-baseline gap-2">
-                                    <span className="text-5xl font-black text-white">₹{isAnnual ? '666' : '799'}</span>
+                                    <span className="text-5xl font-black text-white">{formatAmount(isAnnual ? 8.25 * 85 : 9 * 85)}</span>
                                     <span className="text-slate-400">/month</span>
                                 </div>
-                                {isAnnual && <p className="text-emerald-400 text-sm mt-2">Billed ₹7,999 yearly (Save ₹1,589)</p>}
+                                {isAnnual && <p className="text-emerald-400 text-sm mt-2">Billed {formatAmount(99 * 85)} yearly (Save {formatAmount(9 * 85)})</p>}
                             </div>
                             <Button
                                 onClick={handleSubscribe}
@@ -162,11 +202,14 @@ const Pricing = () => {
                             </Button>
                             <div className="mt-8 space-y-4">
                                 <Feature text="Unlimited connections" highlighted />
-                                <Feature text="Deep AWS Scan (EC2, RDS, Lambda)" highlighted />
+                                <Feature text="Multi-Account Support (Connect 10+ accounts)" highlighted />
+                                <Feature text="14+ Direct API Integrations" highlighted />
+                                <Feature text="Deep Cloud Scan (AWS, GCP, Azure)" highlighted />
                                 <Feature text="Savage AI Recommendations" highlighted />
-                                <Feature text="Weekly Auto-Scans" highlighted />
-                                <Feature text="Export PDF Reports" highlighted />
-                                <Feature text="Priority Support" highlighted />
+                                <Feature text="Weekly Auto-Scans & Pulse Reports" highlighted />
+                                <Feature text="Export PDF & CSV Reports" highlighted />
+                                <Feature text="Historical Savings Charts" highlighted />
+                                <Feature text="Priority 24/7 Support" highlighted />
                             </div>
                         </motion.div>
                     </div>
@@ -178,7 +221,7 @@ const Pricing = () => {
                             <Testimonial
                                 name="Pieter Levels"
                                 handle="@levelsio"
-                                text="Saved ₹4.2 lakh/year after upgrading. SubTrack found 3 zombie EC2 instances I forgot about from 2021. Insane."
+                                text={`Saved ${formatAmount(420000)}/year after upgrading. SubTrack found 3 zombie EC2 instances I forgot about from 2021. Insane.`}
                                 image="https://pbs.twimg.com/profile_images/1756727697758965760/W_Xb8Xj-_400x400.jpg"
                             />
                             <Testimonial
@@ -190,7 +233,7 @@ const Pricing = () => {
                             <Testimonial
                                 name="Danny Postma"
                                 handle="@dannypostma"
-                                text="ROI is infinite. Paid ₹799, saved ₹15,000 in the first 10 minutes. If you're not using this, you hate money."
+                                text={`ROI is infinite. Paid ${formatAmount(9 * 85)}, saved thousands in the first 10 minutes. If you're not using this, you hate money.`}
                                 image="https://pbs.twimg.com/profile_images/1620789235323240449/1-1-1_400x400.jpg"
                             />
                         </div>
@@ -202,7 +245,7 @@ const Pricing = () => {
                         <div className="space-y-6">
                             <FAQ question="Can I cancel anytime?" answer="Yes, cancel with one click from your dashboard. No questions asked." />
                             <FAQ question="Is it safe?" answer="We use read-only API keys and bank-level encryption. We can't modify your infrastructure." />
-                            <FAQ question="What if I don't save money?" answer="We offer a 30-day money-back guarantee. If we don't find savings, you don't pay." />
+                            <FAQ question="What if I don't save money?" answer="Our AI finds savings for 95% of users. If you're not satisfied, you can cancel anytime." />
                         </div>
                     </div>
                 </div>

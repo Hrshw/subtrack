@@ -16,9 +16,14 @@ const getRobotSpeech = (req, res) => __awaiter(void 0, void 0, void 0, function*
     try {
         // @ts-ignore
         const clerkId = req.auth.userId;
-        const user = yield User_1.User.findOne({ clerkId });
+        let user = yield User_1.User.findOne({ clerkId });
         if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+            user = yield User_1.User.create({
+                clerkId,
+                email: `${clerkId}@temp.clerk`,
+                name: 'User'
+            });
+            console.log(`Auto-created user for robot: ${clerkId}`);
         }
         const speech = yield RobotService_1.RobotService.getRobotSpeech(user._id.toString());
         res.json({ message: speech });
@@ -37,9 +42,14 @@ const sendChatMessage = (req, res) => __awaiter(void 0, void 0, void 0, function
         if (!message || typeof message !== 'string') {
             return res.status(400).json({ message: 'Message is required' });
         }
-        const user = yield User_1.User.findOne({ clerkId });
+        let user = yield User_1.User.findOne({ clerkId });
         if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+            user = yield User_1.User.create({
+                clerkId,
+                email: `${clerkId}@temp.clerk`,
+                name: 'User'
+            });
+            console.log(`Auto-created user for chat: ${clerkId}`);
         }
         const response = yield RobotService_1.RobotService.handleChatMessage(user._id.toString(), message);
         res.json(response);

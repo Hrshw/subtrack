@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Book, Shield, HelpCircle, CreditCard, ArrowLeft, Menu, X } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import Footer from '../components/Footer';
+import Meta from '../components/Meta';
 
 const DocsLayout = () => {
     const location = useLocation();
@@ -16,6 +17,7 @@ const DocsLayout = () => {
         {
             label: 'Integrations',
             items: [
+                { to: '/docs/integrations/openai', label: 'OpenAI' },
                 { to: '/docs/integrations/github', label: 'GitHub' },
                 { to: '/docs/integrations/vercel', label: 'Vercel' },
                 { to: '/docs/integrations/aws', label: 'AWS' },
@@ -24,6 +26,11 @@ const DocsLayout = () => {
                 { to: '/docs/integrations/resend', label: 'Resend' },
                 { to: '/docs/integrations/clerk', label: 'Clerk' },
                 { to: '/docs/integrations/stripe', label: 'Stripe' },
+                { to: '/docs/integrations/digitalocean', label: 'DigitalOcean' },
+                { to: '/docs/integrations/supabase', label: 'Supabase' },
+                { to: '/docs/integrations/notion', label: 'Notion' },
+                { to: '/docs/integrations/gcp', label: 'Google Cloud' },
+                { to: '/docs/integrations/azure', label: 'Azure' },
             ]
         },
         { to: '/docs/security-privacy', label: 'Security & Privacy', icon: Shield },
@@ -35,6 +42,10 @@ const DocsLayout = () => {
 
     return (
         <HelmetProvider>
+            <Meta
+                title="Documentation"
+                description="Learn how to connect your services and optimize your SaaS spend with SubTrack's comprehensive developer guides."
+            />
             <div className="min-h-screen bg-slate-950 text-slate-300 flex flex-col md:flex-row">
                 {/* Mobile Header */}
                 <div className="md:hidden flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/50 backdrop-blur-xl sticky top-0 z-50">

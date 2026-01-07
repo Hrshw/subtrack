@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { User } from '../models/User';
+import { Transaction } from '../models/Transaction';
 
 const PAYU_URL = process.env.PAYU_URL || 'https://secure.payu.in';
 const PAYU_MERCHANT_KEY = process.env.PAYU_MERCHANT_KEY || '';
@@ -51,11 +52,22 @@ export class PayUService {
             console.log(`💳 PayU session created for user ${userId}`);
             console.log(`   Amount: ₹${amount}, Plan: ${plan}, TxnID: ${txnid}`);
 
-            return {
+            const sessionData = {
                 ...paymentData,
                 hash,
                 payuUrl: `${PAYU_URL}/_payment`
             };
+
+            // Log initial pending transaction
+            await Transaction.create({
+                userId,
+                txnid,
+                amount: Number(amount),
+                plan,
+                status: 'pending'
+            });
+
+            return sessionData;
 
         } catch (error) {
             console.error('PayU session creation failed:', error);
@@ -133,14 +145,45 @@ export class PayUService {
             console.log(`🎉 User ${userId} upgraded to Pro!`);
             console.log(`   Plan: ${plan}, Amount: ₹${amount}, TxnID: ${txnid}`);
 
-            // TODO: Send confirmation email
-            // TODO: Log transaction in database
+            // Log transaction in database
+            await Transaction.findOneAndUpdate(
+                { txnid },
+                {
+                    status: 'success',
+                    rawResponse: responseData
+                },
+                { upsert: true }
+            );
 
             return user;
 
         } catch (error) {
             console.error('Failed to handle successful payment:', error);
             throw error;
+        }
+    }
+
+    /**
+     * Handle failed payment
+     * Log failure reason
+     */
+    static async handleFailedPayment(responseData: any) {
+        try {
+            const { txnid, error_Message, unmappedstatus } = responseData;
+
+            await Transaction.findOneAndUpdate(
+                { txnid },
+                {
+                    status: 'failure',
+                    errorMessage: error_Message || unmappedstatus || 'Payment failed',
+                    rawResponse: responseData
+                },
+                { upsert: true }
+            );
+
+            console.log(`❌ Transaction ${txnid} marked as failure: ${error_Message}`);
+        } catch (error) {
+            console.error('Failed to log payment failure:', error);
         }
     }
 }

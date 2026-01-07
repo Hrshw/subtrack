@@ -28,10 +28,10 @@ const LeakAlert = ({ resourceName = 'GitHub Copilot', potentialSavings = 800, re
                         "/mo"),
                     react_1.default.createElement(components_1.Text, { style: reasonText }, reason)),
                 react_1.default.createElement(components_1.Section, { style: content },
-                    react_1.default.createElement(components_1.Button, { style: button, href: "https://subtrack.app/dashboard" }, "Fix This Leak")),
+                    react_1.default.createElement(components_1.Button, { style: button, href: "https://subtrack.pulseguard.in/dashboard" }, "Fix This Leak")),
                 react_1.default.createElement(components_1.Hr, { style: hr }),
                 react_1.default.createElement(components_1.Section, { style: footer },
-                    react_1.default.createElement(components_1.Link, { href: "https://subtrack.app/settings", style: link }, "Manage Alert Settings"))))));
+                    react_1.default.createElement(components_1.Link, { href: "https://subtrack.pulseguard.in/settings", style: link }, "Manage Alert Settings"))))));
 };
 exports.LeakAlert = LeakAlert;
 const main = {

@@ -14,15 +14,23 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const EmailService_1 = require("../services/EmailService");
+const Feedback_1 = require("../models/Feedback");
 const router = express_1.default.Router();
 // Public route to submit support ticket
 router.post('/submit', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { name, email, message } = req.body;
+        const { name, email, message, category = 'support' } = req.body;
         if (!name || !email || !message) {
             return res.status(400).json({ message: 'Missing required fields' });
         }
-        // Send email to support team
+        // 1. Save to Database
+        yield Feedback_1.Feedback.create({
+            name,
+            email,
+            message,
+            category
+        });
+        // 2. Send email to support team
         yield EmailService_1.EmailService.sendSupportTicket(name, email, message);
         res.status(200).json({ success: true, message: 'Support message received' });
     }

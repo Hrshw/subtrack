@@ -154,20 +154,29 @@ export class GitHubIntegration implements Integration {
                 totalRepos: realData.totalRepos,
                 privateReposCount: realData.privateReposCount
             });
-            console.log('✅ Using REAL API data (not mock)\n');
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'active',
+                errorMessage: null
+            });
 
             await RuleEngine.analyze(connection.userId, connection._id, 'github', realData, isPro ? 'pro' : 'free');
-        } catch (error) {
+        } catch (error: any) {
             console.error('❌ GitHub API error:', error);
-            console.log('⚠️ FALLBACK: Using mock data due to API failure\n');
+            // Mark connection as error
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'error',
+                errorMessage: error.message || 'Failed to connect to GitHub'
+            });
 
-            // Fallback to safe mock data if API fails
-            const mockData: any = {
+            // Still analyze with empty data to clear any old mock findings
+            await RuleEngine.analyze(connection.userId, connection._id, 'github', {
                 plan: 'free',
                 lastCommitDate: undefined,
-                hasPrivateRepos: false
-            };
-            await RuleEngine.analyze(connection.userId, connection._id, 'github', mockData);
+                hasPrivateRepos: false,
+                repos: []
+            });
         }
     }
 }
@@ -220,10 +229,25 @@ export class VercelIntegration implements Integration {
             };
             const bandwidthLimit = planLimits[plan] || 100;
 
+            // API Call 3: Get projects
+            console.log('📡 Calling Vercel API: /v9/projects...');
+            const projectsRes = await fetch('https://api.vercel.com/v9/projects', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const projectsData = await projectsRes.json();
+            const projects = projectsData.projects || [];
+
             const realData = {
                 plan: plan,
                 bandwidthUsage: bandwidthUsage,
-                bandwidthLimit: bandwidthLimit
+                bandwidthLimit: bandwidthLimit,
+                projects: projects.map((p: any) => ({
+                    name: p.name,
+                    id: p.id,
+                    framework: p.framework,
+                    lastModified: p.updatedAt ? new Date(p.updatedAt).toISOString() : new Date().toISOString(),
+                    region: 'Global'
+                }))
             };
 
             console.log('🎯 REAL DATA FROM VERCEL API:', {
@@ -235,18 +259,28 @@ export class VercelIntegration implements Integration {
 
             const user = await User.findById(connection.userId);
             const userTier = (user?.subscriptionStatus as 'free' | 'pro') || 'free';
-            await RuleEngine.analyze(connection.userId, connection._id, 'vercel', realData, userTier);
-        } catch (error) {
-            console.error('❌ Vercel API error:', error);
-            console.log('⚠️ FALLBACK: Using mock data due to API failure\n');
 
-            // Fallback to safe mock data
-            const mockData = {
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'active',
+                errorMessage: null
+            });
+
+            await RuleEngine.analyze(connection.userId, connection._id, 'vercel', realData, userTier);
+        } catch (error: any) {
+            console.error('❌ Vercel API error:', error);
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'error',
+                errorMessage: error.message || 'Failed to connect to Vercel'
+            });
+
+            await RuleEngine.analyze(connection.userId, connection._id, 'vercel', {
                 plan: 'hobby',
-                bandwidthUsage: 5,
-                bandwidthLimit: 100
-            };
-            await RuleEngine.analyze(connection.userId, connection._id, 'vercel', mockData);
+                bandwidthUsage: 0,
+                bandwidthLimit: 100,
+                projects: []
+            });
         }
     }
 }
@@ -313,11 +347,22 @@ export class AWSIntegration implements Integration {
             });
 
             // Pass real data to RuleEngine for analysis
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'active',
+                errorMessage: null
+            });
             await RuleEngine.analyze(connection.userId, connection._id, 'aws', awsResources, isPro ? 'pro' : 'free');
 
         } catch (error: any) {
             console.error('❌ AWS Real Scan failed:', error);
             console.error('Error details:', error.message);
+
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'error',
+                errorMessage: error.message || 'AWS SDK error. Check credentials and region.'
+            });
 
             // Fallback to empty data on error
             await RuleEngine.analyze(connection.userId, connection._id, 'aws', {
@@ -330,7 +375,7 @@ export class AWSIntegration implements Integration {
                 rdsInstances: [],
                 region: 'us-east-1',
                 scanError: error.message
-            });
+            }, 'free');
         }
     }
 }
@@ -381,10 +426,24 @@ export class SentryIntegration implements Integration {
                 quota: org.subscription?.quota
             }, null, 2));
 
+            // API Call 3: Get projects
+            console.log('📡 Calling Sentry API: /projects/...');
+            const projectsRes = await fetch(`https://sentry.io/api/0/organizations/${org.slug}/projects/`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const projects = await projectsRes.json();
+
             const realData = {
                 plan: plan,
                 eventCount: eventCount,
-                planLimit: org.subscription?.quota || 5000
+                planLimit: org.subscription?.quota || 5000,
+                projects: Array.isArray(projects) ? projects.map((p: any) => ({
+                    name: p.name,
+                    slug: p.slug,
+                    platform: p.platform,
+                    lastModified: p.dateCreated,
+                    region: 'Cloud'
+                })) : []
             };
 
             console.log('🎯 REAL DATA FROM SENTRY API:', {
@@ -396,18 +455,28 @@ export class SentryIntegration implements Integration {
 
             const user = await User.findById(connection.userId);
             const userTier = (user?.subscriptionStatus as 'free' | 'pro') || 'free';
-            await RuleEngine.analyze(connection.userId, connection._id, 'sentry', realData, userTier);
-        } catch (error) {
-            console.error('❌ Sentry API error:', error);
-            console.log('⚠️ FALLBACK: Using mock data due to API failure\n');
 
-            // Fallback to safe mock data
-            const mockData = {
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'active',
+                errorMessage: null
+            });
+
+            await RuleEngine.analyze(connection.userId, connection._id, 'sentry', realData, userTier);
+        } catch (error: any) {
+            console.error('❌ Sentry API error:', error);
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'error',
+                errorMessage: error.message || 'Failed to connect to Sentry'
+            });
+
+            await RuleEngine.analyze(connection.userId, connection._id, 'sentry', {
                 plan: 'developer',
                 eventCount: 0,
-                planLimit: 5000
-            };
-            await RuleEngine.analyze(connection.userId, connection._id, 'sentry', mockData);
+                planLimit: 5000,
+                projects: []
+            });
         }
     }
 }
@@ -460,12 +529,29 @@ export class LinearIntegration implements Integration {
             });
 
             if (!response.ok) {
-                console.log('⚠️ Linear API failed, using mock data');
-                await RuleEngine.analyze(connection.userId, connection._id, 'linear', { plan: 'standard' });
+                const errorBody = await response.json().catch(() => ({}));
+                const detailedError = errorBody.message || errorBody.error || `Linear API Error (${response.status})`;
+
+                const { Connection } = await import('../models/Connection');
+                await Connection.findByIdAndUpdate(connection._id, {
+                    status: 'error',
+                    errorMessage: detailedError
+                });
                 return;
             }
 
             const data = await response.json();
+
+            if (data.errors && data.errors.length > 0) {
+                const detailedError = data.errors[0].message || 'Linear GraphQL Error';
+                const { Connection } = await import('../models/Connection');
+                await Connection.findByIdAndUpdate(connection._id, {
+                    status: 'error',
+                    errorMessage: detailedError
+                });
+                return;
+            }
+
             const org = data.data?.organization;
             const userCount = org?.users?.nodes?.filter((u: any) => u.active).length || 0;
             const teamCount = org?.teams?.nodes?.length || 0;
@@ -475,15 +561,25 @@ export class LinearIntegration implements Integration {
 
             const user = await User.findById(connection.userId);
             const userTier = (user?.subscriptionStatus as 'free' | 'pro') || 'free';
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'active',
+                errorMessage: null
+            });
+
             await RuleEngine.analyze(connection.userId, connection._id, 'linear', {
                 plan: subscriptionType,
                 userCount,
                 teamCount,
                 orgName: org?.name
             }, userTier);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Linear scan error:', error);
-            await RuleEngine.analyze(connection.userId, connection._id, 'linear', { plan: 'standard' });
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'error',
+                errorMessage: error.message || 'Failed to connect to Linear'
+            });
         }
     }
 }
@@ -502,8 +598,14 @@ export class ResendIntegration implements Integration {
             });
 
             if (!domainsRes.ok) {
-                console.log('⚠️ Resend API failed, using mock data');
-                await RuleEngine.analyze(connection.userId, connection._id, 'resend', { plan: 'free' });
+                const errorBody = await domainsRes.json().catch(() => ({}));
+                const detailedError = errorBody.message || errorBody.error || `Resend API Error (${domainsRes.status})`;
+
+                const { Connection } = await import('../models/Connection');
+                await Connection.findByIdAndUpdate(connection._id, {
+                    status: 'error',
+                    errorMessage: detailedError
+                });
                 return;
             }
 
@@ -522,15 +624,31 @@ export class ResendIntegration implements Integration {
 
             const user = await User.findById(connection.userId);
             const userTier = (user?.subscriptionStatus as 'free' | 'pro') || 'free';
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'active',
+                errorMessage: null
+            });
+
             await RuleEngine.analyze(connection.userId, connection._id, 'resend', {
                 plan: domains.length > 0 ? 'pro' : 'free',
                 domainCount: domains.length,
                 apiKeyCount: apiKeys.length,
-                domains: domains.map((d: any) => d.name)
+                domains: domains.map((d: any) => ({
+                    name: d.domain,
+                    id: d.id,
+                    region: d.region,
+                    lastModified: d.created_at,
+                    status: d.status
+                }))
             }, userTier);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Resend scan error:', error);
-            await RuleEngine.analyze(connection.userId, connection._id, 'resend', { plan: 'free' });
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'error',
+                errorMessage: error.message || 'Failed to connect to Resend'
+            });
         }
     }
 }
@@ -549,8 +667,14 @@ export class ClerkIntegration implements Integration {
             });
 
             if (!usersRes.ok) {
-                console.log('⚠️ Clerk API failed, using mock data');
-                await RuleEngine.analyze(connection.userId, connection._id, 'clerk', { plan: 'free' });
+                const errorBody = await usersRes.json().catch(() => ({}));
+                const detailedError = errorBody.errors?.[0]?.message || errorBody.message || `Clerk API Error (${usersRes.status})`;
+
+                const { Connection } = await import('../models/Connection');
+                await Connection.findByIdAndUpdate(connection._id, {
+                    status: 'error',
+                    errorMessage: detailedError
+                });
                 return;
             }
 
@@ -574,14 +698,24 @@ export class ClerkIntegration implements Integration {
 
             const user = await User.findById(connection.userId);
             const userTier = (user?.subscriptionStatus as 'free' | 'pro') || 'free';
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'active',
+                errorMessage: null
+            });
+
             await RuleEngine.analyze(connection.userId, connection._id, 'clerk', {
                 plan,
                 userCount: totalUsers,
                 orgCount: totalOrgs
             }, userTier);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Clerk scan error:', error);
-            await RuleEngine.analyze(connection.userId, connection._id, 'clerk', { plan: 'free' });
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'error',
+                errorMessage: error.message || 'Failed to connect to Clerk'
+            });
         }
     }
 }
@@ -600,8 +734,14 @@ export class StripeIntegration implements Integration {
             });
 
             if (!accountRes.ok) {
-                console.log('⚠️ Stripe API failed, using mock data');
-                await RuleEngine.analyze(connection.userId, connection._id, 'stripe', { plan: 'starter' });
+                const errorBody = await accountRes.json().catch(() => ({}));
+                const detailedError = errorBody.error?.message || errorBody.message || `Stripe API Error (${accountRes.status})`;
+
+                const { Connection } = await import('../models/Connection');
+                await Connection.findByIdAndUpdate(connection._id, {
+                    status: 'error',
+                    errorMessage: detailedError
+                });
                 return;
             }
 
@@ -626,17 +766,123 @@ export class StripeIntegration implements Integration {
 
             const user = await User.findById(connection.userId);
             const userTier = (user?.subscriptionStatus as 'free' | 'pro') || 'free';
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'active',
+                errorMessage: null
+            });
+
             await RuleEngine.analyze(connection.userId, connection._id, 'stripe', {
                 plan: account.type || 'standard',
                 accountId: account.id,
                 businessName: account.business_profile?.name,
                 chargesVolume: charges.length,
                 subscriptionCount: totalSubs,
-                country: account.country
+                country: account.country,
+                recentCharges: charges.map((c: any) => ({
+                    name: `Charge ${c.id.substring(3, 10)}`,
+                    amount: (c.amount / 100).toFixed(2),
+                    currency: c.currency.toUpperCase(),
+                    lastModified: new Date(c.created * 1000).toISOString(),
+                    region: c.billing_details?.address?.country || account.country
+                }))
             }, userTier);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Stripe scan error:', error);
-            await RuleEngine.analyze(connection.userId, connection._id, 'stripe', { plan: 'starter' });
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'error',
+                errorMessage: error.message || 'Failed to connect to Stripe'
+            });
+        }
+    }
+}
+
+export class OpenAIIntegration implements Integration {
+    async scan(connection: any) {
+        console.log('\n🤖 Starting OpenAI scan...');
+        const { decryptToken } = await import('../utils/encryption');
+
+        try {
+            const apiKey = decryptToken(connection.encryptedToken);
+
+            // Get all days of current month so far
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            const daysToScan = now.getDate();
+
+            let totalTokens = 0;
+            const usageByModel: Record<string, number> = {};
+            const usageHistory: any[] = [];
+
+            console.log(`📡 Fetching OpenAI usage for ${daysToScan} days of current month...`);
+
+            // Fetch each day's usage (OpenAI API restriction: only 1 day per request)
+            const fetchPromises = [];
+            for (let i = 1; i <= daysToScan; i++) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                fetchPromises.push(
+                    fetch(`https://api.openai.com/v1/usage?date=${dateStr}`, {
+                        headers: { 'Authorization': `Bearer ${apiKey}` }
+                    }).then(res => {
+                        if (!res.ok) {
+                            // If any day's fetch fails, we should still try to process others
+                            // but log the error for that specific day.
+                            console.error(`❌ OpenAI API Error for date ${dateStr}: ${res.status}`);
+                            return { data: [], errorStatus: res.status }; // Return empty data but mark error
+                        }
+                        return res.json();
+                    })
+                );
+            }
+
+            const allUsageResults = await Promise.all(fetchPromises);
+
+            let hasApiError = false;
+            for (const usageData of allUsageResults) {
+                if (usageData.errorStatus) {
+                    hasApiError = true;
+                    // Optionally, you could collect detailed error messages here
+                    continue; // Skip processing this failed day's data
+                }
+
+                if (usageData.data && Array.isArray(usageData.data)) {
+                    usageData.data.forEach((item: any) => {
+                        const tokens = (item.n_context_tokens_total || 0) + (item.n_generated_tokens_total || 0);
+                        totalTokens += tokens;
+                        const model = item.snapshot_id || 'unknown';
+                        usageByModel[model] = (usageByModel[model] || 0) + tokens;
+                    });
+                }
+            }
+
+            console.log(`✅ OpenAI Scan Complete. Total Tokens: ${totalTokens.toLocaleString()}`);
+
+            const realData = {
+                totalTokens,
+                usageByModel,
+                plan: 'usage-based',
+                projects: []
+            };
+
+            const user = await User.findById(connection.userId);
+            const userTier = (user?.subscriptionStatus as 'free' | 'pro') || 'free';
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'active',
+                errorMessage: null
+            });
+
+            await RuleEngine.analyze(connection.userId, connection._id, 'openai', realData, userTier);
+
+        } catch (error: any) {
+            console.error('OpenAI scan error:', error);
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'error',
+                errorMessage: error.message || 'Failed to connect to OpenAI'
+            });
         }
     }
 }
@@ -652,6 +898,227 @@ export const getIntegration = (provider: string): Integration | null => {
         case 'resend': return new ResendIntegration();
         case 'clerk': return new ClerkIntegration();
         case 'stripe': return new StripeIntegration();
+        case 'openai': return new OpenAIIntegration();
+        case 'digitalocean': return new DigitalOceanIntegration();
+        case 'supabase': return new SupabaseIntegration();
+        case 'notion': return new NotionIntegration();
         default: return null;
     }
 };
+
+// DigitalOcean Integration - Tracks droplets and billing
+export class DigitalOceanIntegration implements Integration {
+    async scan(connection: any) {
+        console.log('\n🌊 Starting DigitalOcean scan...');
+        const { decryptToken } = await import('../utils/encryption');
+
+        try {
+            const apiKey = decryptToken(connection.encryptedToken);
+
+            // Get droplets list
+            console.log('📡 Calling DigitalOcean API: /v2/droplets...');
+            const dropletsRes = await fetch('https://api.digitalocean.com/v2/droplets?per_page=100', {
+                headers: { 'Authorization': `Bearer ${apiKey}` }
+            });
+
+            if (!dropletsRes.ok) {
+                throw new Error(`DigitalOcean API failed: ${dropletsRes.status}`);
+            }
+
+            const dropletsData = await dropletsRes.json();
+            const droplets = dropletsData.droplets || [];
+
+            // Get account balance
+            console.log('📡 Calling DigitalOcean API: /v2/customers/my/balance...');
+            const balanceRes = await fetch('https://api.digitalocean.com/v2/customers/my/balance', {
+                headers: { 'Authorization': `Bearer ${apiKey}` }
+            });
+
+            let balance = { month_to_date_usage: '0', account_balance: '0' };
+            if (balanceRes.ok) {
+                balance = await balanceRes.json();
+            }
+
+            console.log(`✅ DigitalOcean Scan Complete. ${droplets.length} droplets found.`);
+
+            const realData = {
+                droplets: droplets.map((d: any) => ({
+                    id: d.id,
+                    name: d.name,
+                    status: d.status,
+                    size: d.size_slug,
+                    region: d.region?.slug,
+                    memory: d.memory,
+                    vcpus: d.vcpus,
+                    disk: d.disk,
+                    createdAt: d.created_at
+                })),
+                monthToDateUsage: parseFloat(balance.month_to_date_usage || '0'),
+                accountBalance: parseFloat(balance.account_balance || '0'),
+                plan: 'usage-based'
+            };
+
+            const user = await User.findById(connection.userId);
+            const userTier = (user?.subscriptionStatus as 'free' | 'pro') || 'free';
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'active',
+                errorMessage: null
+            });
+
+            await RuleEngine.analyze(connection.userId, connection._id, 'digitalocean', realData, userTier);
+
+        } catch (error: any) {
+            console.error('DigitalOcean scan error:', error);
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'error',
+                errorMessage: error.message || 'Failed to connect to DigitalOcean'
+            });
+        }
+    }
+}
+
+// Supabase Integration - Tracks projects and usage
+export class SupabaseIntegration implements Integration {
+    async scan(connection: any) {
+        console.log('\n⚡ Starting Supabase scan...');
+        const { decryptToken } = await import('../utils/encryption');
+
+        try {
+            const apiKey = decryptToken(connection.encryptedToken);
+
+            // Get projects list
+            console.log('📡 Calling Supabase Management API: /v1/projects...');
+            const projectsRes = await fetch('https://api.supabase.com/v1/projects', {
+                headers: { 'Authorization': `Bearer ${apiKey}` }
+            });
+
+            if (!projectsRes.ok) {
+                throw new Error(`Supabase API failed: ${projectsRes.status}`);
+            }
+
+            const projects = await projectsRes.json();
+
+            console.log(`✅ Supabase Scan Complete. ${projects.length} projects found.`);
+
+            const realData = {
+                projects: projects.map((p: any) => ({
+                    id: p.id,
+                    name: p.name,
+                    region: p.region,
+                    status: p.status,
+                    createdAt: p.created_at,
+                    organization: p.organization_id
+                })),
+                projectCount: projects.length,
+                plan: projects.length > 2 ? 'pro' : 'free' // Infer plan from project count
+            };
+
+            const user = await User.findById(connection.userId);
+            const userTier = (user?.subscriptionStatus as 'free' | 'pro') || 'free';
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'active',
+                errorMessage: null
+            });
+
+            await RuleEngine.analyze(connection.userId, connection._id, 'supabase', realData, userTier);
+
+        } catch (error: any) {
+            console.error('Supabase scan error:', error);
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'error',
+                errorMessage: error.message || 'Failed to connect to Supabase'
+            });
+        }
+    }
+}
+
+// Notion Integration - Tracks workspaces and usage
+export class NotionIntegration implements Integration {
+    async scan(connection: any) {
+        console.log('\n📝 Starting Notion scan...');
+        const { decryptToken } = await import('../utils/encryption');
+
+        try {
+            const apiKey = decryptToken(connection.encryptedToken);
+
+            // Get user info (workspace info)
+            console.log('📡 Calling Notion API: /v1/users/me...');
+            const userRes = await fetch('https://api.notion.com/v1/users/me', {
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Notion-Version': '2022-06-28'
+                }
+            });
+
+            if (!userRes.ok) {
+                throw new Error(`Notion API failed: ${userRes.status}`);
+            }
+
+            const userData = await userRes.json();
+
+            // List users to get workspace member count
+            console.log('📡 Calling Notion API: /v1/users...');
+            const usersRes = await fetch('https://api.notion.com/v1/users?page_size=100', {
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Notion-Version': '2022-06-28'
+                }
+            });
+
+            let memberCount = 1;
+            if (usersRes.ok) {
+                const usersData = await usersRes.json();
+                memberCount = usersData.results?.length || 1;
+            }
+
+            // Search for databases to estimate usage
+            console.log('📡 Calling Notion API: /v1/search (databases)...');
+            const searchRes = await fetch('https://api.notion.com/v1/search', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Notion-Version': '2022-06-28',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ filter: { property: 'object', value: 'database' }, page_size: 100 })
+            });
+
+            let databaseCount = 0;
+            if (searchRes.ok) {
+                const searchData = await searchRes.json();
+                databaseCount = searchData.results?.length || 0;
+            }
+
+            console.log(`✅ Notion Scan Complete. ${memberCount} members, ${databaseCount} databases.`);
+
+            const realData = {
+                botUser: userData,
+                memberCount,
+                databaseCount,
+                plan: memberCount > 5 ? 'team' : 'free' // Infer plan from member count
+            };
+
+            const user = await User.findById(connection.userId);
+            const userTier = (user?.subscriptionStatus as 'free' | 'pro') || 'free';
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'active',
+                errorMessage: null
+            });
+
+            await RuleEngine.analyze(connection.userId, connection._id, 'notion', realData, userTier);
+
+        } catch (error: any) {
+            console.error('Notion scan error:', error);
+            const { Connection } = await import('../models/Connection');
+            await Connection.findByIdAndUpdate(connection._id, {
+                status: 'error',
+                errorMessage: error.message || 'Failed to connect to Notion'
+            });
+        }
+    }
+}
